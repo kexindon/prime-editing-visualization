@@ -203,13 +203,20 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .fwd { color: var(--ink); }
 .rev { color: var(--muted); }
 
-/* feature shading applied to base cells */
-.f-pam    { background: var(--pam-bg);    color: var(--pam);    font-weight: 700; }
-.f-spacer { background: var(--spacer-bg); color: var(--spacer); }
-.f-pbs    { background: var(--pbs-bg);    color: var(--pbs);    font-weight: 600; }
-.f-rtt    { background: var(--rtt-bg);    color: var(--rtt); }
-.f-edit   { background: var(--edit-bg);   color: var(--edit);   font-weight: 800; }
-.f-by     { background: var(--bystand-bg);color: var(--bystand);font-weight: 700; }
+/* Features on the DNA itself are marked by WEIGHT ONLY -- no colour, no
+   background. The coloured rows are the pegRNA; leaving the template plain
+   keeps the two visually separate, so it is always clear which strand is DNA
+   and which is the annealed guide. The edit stays coloured because it is the
+   one thing on the template that is not template. */
+/* Boxed rather than underlined: a bottom border sits between the two strands
+   and reads as belonging to whichever one you look at first. */
+.f-pam    { font-weight: 800; box-shadow: inset 0 0 0 2px var(--pam); border-radius: 2px; }
+.f-spacer { font-weight: 700; }
+/* the nicked strand's own extent, kept faint so it never competes with the
+   pegRNA rows above/below it */
+.f-pbs, .f-rtt { font-weight: 700; }
+.f-edit   { color: var(--edit); font-weight: 800; }
+.f-by     { color: var(--bystand); font-weight: 800; }
 .f-sel    { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* nick marker sits between two bases */
@@ -381,3 +388,6 @@ tr.by-detail > td { padding: 0; }
 .by-prot { margin: 9px 0; }
 .by-prot .seqline { line-height: 1.6; }
 .by-prot .stop { color: var(--edit); font-weight: 700; }
+
+.legend-head { font-weight: 700; color: var(--ink) !important; margin-left: 4px; }
+.legend-head:first-child { margin-left: 0; }

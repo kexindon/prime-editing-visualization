@@ -327,13 +327,25 @@ function render() {
       block.appendChild(aaTrack);
     }
 
-    // The spacer anneals to the strand OPPOSITE the PAM, and the PBS/RTT to the
-    // PAM strand itself, so each pegRNA part is drawn against the strand it
-    // actually pairs with: outside the duplex for the spacer, and on the PAM
-    // side for the extension.
-    const pegOnFwd = pt && pt.strand === '+';
+    // Each pegRNA part sits NEXT TO the strand it pairs with, so the two read
+    // as a duplex:
+    //
+    //   PAM on '+' (top): Cas9 nicks the top strand, so the PBS/RTT extension
+    //                     pairs with it and belongs ABOVE it. The spacer pairs
+    //                     with the bottom (non-PAM) strand, so it goes BELOW.
+    //   PAM on '-' (bottom): the mirror image.
+    //
+    // Both were previously placed the wrong way round -- the extension was
+    // pinned under the duplex regardless of strand, so on a '+' design it
+    // appeared to anneal to the bottom strand it has nothing to do with.
+    const pamTop = pt && pt.strand === '+';
+    const ext = pt && (hasOn(pt.pbs, start, end) || hasOn(pt.rtt, start, end));
 
-    if (pt && !pegOnFwd && hasOn(pt.spacer, start, end)) {
+    // above the duplex
+    if (pt && pamTop && ext) {
+      block.appendChild(extensionTrack(pt, start, end, seq));
+    }
+    if (pt && !pamTop && hasOn(pt.spacer, start, end)) {
       block.appendChild(annealTrack(pt.spacer, start, end, 'g-spacer', seq));
     }
 
@@ -342,13 +354,11 @@ function render() {
     // reverse strand (complement, displayed 5'->3' left-to-right of the top strand)
     block.appendChild(strandTrack(complement(seq), start, end, fm, 'rev', nicks, '-'));
 
-    if (pt && pegOnFwd && hasOn(pt.spacer, start, end)) {
+    // below the duplex
+    if (pt && pamTop && hasOn(pt.spacer, start, end)) {
       block.appendChild(annealTrack(pt.spacer, start, end, 'g-spacer', seq));
     }
-    // PBS and RTT form ONE continuous 3' extension, meeting exactly at the nick
-    // (pbs_end == nick == rtt_start), so they share a single row. Drawing them
-    // on separate rows made the extension look like two detached fragments.
-    if (pt && (hasOn(pt.pbs, start, end) || hasOn(pt.rtt, start, end))) {
+    if (pt && !pamTop && ext) {
       block.appendChild(extensionTrack(pt, start, end, seq));
     }
 
@@ -601,15 +611,15 @@ document.addEventListener('mouseup', () => { state.dragAnchor = null; });
 function renderLegend() {
   const L = $('legend');
   L.innerHTML = '';
-  const items = [
-    ['--pam-bg', 'PAM'],
-    ['--spacer-bg', 'Spacer / protospacer'],
-    ['--pbs-bg', 'PBS'],
-    ['--rtt-bg', 'RTT'],
-    ['--edit-bg', 'Edit'],
-    ['--bystand-bg', 'Silent bystander'],
-  ];
-  for (const [v, label] of items) {
+  // Colour now means "this row is pegRNA"; the DNA template is left plain so
+  // the two are never confused. Say so, rather than listing colours that no
+  // longer appear on the template.
+  L.appendChild(el('span', 'legend-head', 'pegRNA:'));
+  for (const [v, label] of [['--spacer-bg', 'Spacer'],
+                            ['--pbs-bg', 'PBS'],
+                            ['--rtt-bg', 'RTT'],
+                            ['--edit-bg', 'Edit installed'],
+                            ['--bystand-bg', 'Silent bystander']]) {
     const s = el('span');
     const i = el('i');
     i.style.background = `var(${v})`;
@@ -617,8 +627,17 @@ function renderLegend() {
     s.appendChild(document.createTextNode(label));
     L.appendChild(s);
   }
-  const n = el('span', null, '│ = nick site');
-  L.appendChild(n);
+
+  L.appendChild(el('span', 'legend-head', 'DNA:'));
+  L.appendChild(el('span', null, 'bold = protospacer / PBS / RTT extent'));
+  const pam = el('span');
+  const pamBox = el('i');
+  pamBox.style.boxShadow = 'inset 0 0 0 2px var(--pam)';
+  pamBox.style.background = 'transparent';
+  pam.appendChild(pamBox);
+  pam.appendChild(document.createTextNode('PAM'));
+  L.appendChild(pam);
+  L.appendChild(el('span', null, '│ = nick site'));
 }
 
 /* ---------- 4. pegRNA design ---------- */
