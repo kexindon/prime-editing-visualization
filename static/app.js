@@ -18,7 +18,8 @@ const LINE_WIDTH = 60;   // bases per row in the viewer
 // The PBS lies wholly inside the protospacer (it is complementary to the nicked
 // strand just 5' of the nick), and the RTT covers the PAM, so the containing
 // feature must lose to the contained one or it hides it completely.
-const FEATURE_PRIORITY = ['f-edit', 'f-by', 'f-pam', 'f-pbs', 'f-rtt', 'f-spacer'];
+const FEATURE_PRIORITY = ['f-edit', 'f-by', 'f-pam', 'f-pbs', 'f-rtt', 'f-spacer',
+                          'f-bridge'];
 
 const state = {
   sequence: '',
@@ -248,6 +249,22 @@ function featureMap() {
   add(state.editStart, Math.max(state.editEnd, state.editStart + 1), 'f-edit', '-');
 
   // silent bystander positions, if one is being previewed
+  //The scaffold is not drawn as a strand -- it does not anneal to anything --
+  //but the spacer and the RTT are two ends of one molecule, and with the two
+  //rows on opposite sides of the duplex nothing said so. Bold the duplex cells
+  //spanned between the spacer's 3' exit and the RTT's 5' entry, so the eye can
+  //follow the strand across the gap.
+  if (d) {
+    const st = d.strand;
+    const spacerExit = st === '+' ? d.protospacer_end - 1 : d.protospacer_start;
+    const rttEntry = st === '+' ? d.rtt_end - 1 : d.rtt_start;
+    const lo = Math.min(spacerExit, rttEntry);
+    const hi = Math.max(spacerExit, rttEntry);
+    for (let i = lo; i <= hi; i++) {
+      if (i >= 0 && i < L) { m[i].fwd.push('f-bridge'); m[i].rev.push('f-bridge'); }
+    }
+  }
+
   if (state.activeBystander) {
     for (const p of state.activeBystander.positions_forward) {
       if (p >= 0 && p < L) {
@@ -347,7 +364,8 @@ function render() {
       block.appendChild(extensionTrack(pt, start, end, seq));
     }
     if (pt && !pamTop && hasOn(pt.spacer, start, end)) {
-      block.appendChild(annealTrack(pt.spacer, start, end, 'g-spacer', seq));
+      block.appendChild(annealTrack(pt.spacer, start, end, 'g-spacer', seq,
+                                    null, pt.ends));
     }
 
     // forward strand
@@ -357,7 +375,8 @@ function render() {
 
     // below the duplex
     if (pt && pamTop && hasOn(pt.spacer, start, end)) {
-      block.appendChild(annealTrack(pt.spacer, start, end, 'g-spacer', seq));
+      block.appendChild(annealTrack(pt.spacer, start, end, 'g-spacer', seq,
+                                    null, pt.ends));
     }
     if (pt && !pamTop && ext) {
       block.appendChild(extensionTrack(pt, start, end, seq));
@@ -480,11 +499,29 @@ function pegRNATracks(d) {
   const pbs = lay(pbsSeq, d.pbs_start, d.pbs_end);
   const rtt = lay(rttSeq, d.rtt_start, d.rtt_end);
 
-  return { spacer, pbs, rtt, strand: d.strand };
+  //The three parts are ONE molecule, run 5'->3' as: spacer -> (scaffold) ->
+  //RTT -> PBS. So there is a single 5' start (the spacer's) and a single 3'
+  //terminus (the PBS's), and exactly one arrowhead, at that terminus. Marking
+  //each segment's own ends put arrows on both rows pointing opposite ways,
+  //which read as two separate strands rather than one.
+  const endOf = (arr) => arr.length ? arr[arr.length - 1].i : null;
+  const startOf = (arr) => arr.length ? arr[0].i : null;
+
+  //Where the molecule enters and leaves the drawn region, and where the
+  //scaffold has to bridge from the spacer across to the RTT.
+  const ends = {
+    start: startOf(spacer),          //pegRNA 5' terminus
+    spacerEnd: endOf(spacer),        //last spacer base before the scaffold
+    rttStart: startOf(rtt),          //RTT resumes here, after the scaffold
+    terminus: endOf(pbs),            //pegRNA 3' terminus -- the only arrowhead
+    dir: (pbs.length > 1 && pbs[pbs.length - 1].i < pbs[0].i) ? -1 : 1,
+  };
+
+  return { spacer, pbs, rtt, strand: d.strand, ends };
 }
 
 /* One track row: sparse cells placed at their forward-strand column. */
-function annealTrack(items, start, end, cls, seq, label) {
+function annealTrack(items, start, end, cls, seq, label, ends) {
   const track = el('div', 'track ' + cls);
   const byCol = new Map();
   for (const it of items) byCol.set(it.i, it);
@@ -495,6 +532,11 @@ function annealTrack(items, start, end, cls, seq, label) {
     // a null char means "same as the target here" (PBS pairs with the template)
     const ch = it.ch === null ? seq[i] : it.ch;
     const cell = el('span', 'cell ' + cls + '-b', ch);
+    if (ends) {
+      //the molecule's 5' start, and the point where it leaves for the scaffold
+      if (i === ends.start) cell.classList.add('cap5');
+      if (i === ends.spacerEnd) cell.classList.add('to-scaffold');
+    }
     if (it.ch !== null && seq[i] !== undefined && it.ch !== seq[i]) {
       cell.classList.add('mismatch');
       cell.title = 'templated change: ' + seq[i] + ' → ' + it.ch;
@@ -549,6 +591,15 @@ function extensionTrack(pt, start, end, seq) {
                    (it.expect === 'same' ? it.ch : complement(it.ch));
     } else {
       cell.title = (isPbs ? 'PBS' : 'RTT') + ' · pairs with ' + seq[i];
+    }
+
+    const e = pt.ends;
+    //where the scaffold hands the strand back to the RTT
+    if (i === e.rttStart) cell.classList.add('from-scaffold');
+    //the pegRNA's single 3' terminus: the only arrowhead on the whole molecule
+    if (i === e.terminus) {
+      cell.classList.add('cap3', e.dir < 0 ? 'to-left' : 'to-right');
+      cell.title += " · pegRNA 3' end";
     }
     track.appendChild(cell);
   }
