@@ -402,44 +402,4 @@ td.by-actions button.on {
 /* the RTT column is the long one; let the row breathe instead */
 table.bystanders td.mono { font-size: 11px; }
 
-/* --- one molecule, one direction --------------------------------------------
-   spacer -> (scaffold) -> RTT -> PBS is a single strand, so it gets a single
-   5' tick and a single 3' arrowhead, at the PBS terminus. Marking each segment
-   separately produced arrows on both rows pointing opposite ways, which read
-   as two independent strands. */
-
-.cell.cap5, .cell.cap3, .cell.to-scaffold, .cell.from-scaffold { position: relative; }
-
-/* 5' start of the whole pegRNA */
-.cell.cap5::before {
-  content: "";
-  position: absolute;
-  width: 2px; height: 8px;
-  background: currentColor;
-  top: -2px; left: 0;
-}
-
-/* the single 3' terminus */
-.cell.cap3::after {
-  content: "";
-  position: absolute;
-  width: 0; height: 0;
-  border-top: 6px solid transparent;
-  border-bottom: 6px solid transparent;
-  bottom: -6px;
-}
-.cell.cap3.to-left::after  { left: -9px;  border-right: 9px solid var(--pbs); }
-.cell.cap3.to-right::after { right: -9px; border-left:  9px solid var(--pbs); }
-
-/* where the strand leaves for the scaffold and comes back, drawn as an open
-   end rather than a terminus */
-.cell.to-scaffold::after, .cell.from-scaffold::after {
-  content: "";
-  position: absolute;
-  width: 5px; height: 2px;
-  background: currentColor;
-  opacity: 0.75;
-}
-.cell.to-scaffold::after   { top: -2px; right: -5px; }
-.cell.from-scaffold::after { bottom: -2px; left: -5px; }
 
