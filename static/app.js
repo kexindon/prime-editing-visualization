@@ -18,8 +18,7 @@ const LINE_WIDTH = 60;   // bases per row in the viewer
 // The PBS lies wholly inside the protospacer (it is complementary to the nicked
 // strand just 5' of the nick), and the RTT covers the PAM, so the containing
 // feature must lose to the contained one or it hides it completely.
-const FEATURE_PRIORITY = ['f-edit', 'f-by', 'f-pam', 'f-pbs', 'f-rtt', 'f-spacer',
-                          'f-bridge'];
+const FEATURE_PRIORITY = ['f-edit', 'f-by', 'f-pam', 'f-pbs', 'f-rtt', 'f-spacer'];
 
 const state = {
   sequence: '',
@@ -249,22 +248,6 @@ function featureMap() {
   add(state.editStart, Math.max(state.editEnd, state.editStart + 1), 'f-edit', '-');
 
   // silent bystander positions, if one is being previewed
-  //The scaffold is not drawn as a strand -- it does not anneal to anything --
-  //but the spacer and the RTT are two ends of one molecule, and with the two
-  //rows on opposite sides of the duplex nothing said so. Bold the duplex cells
-  //spanned between the spacer's 3' exit and the RTT's 5' entry, so the eye can
-  //follow the strand across the gap.
-  if (d) {
-    const st = d.strand;
-    const spacerExit = st === '+' ? d.protospacer_end - 1 : d.protospacer_start;
-    const rttEntry = st === '+' ? d.rtt_end - 1 : d.rtt_start;
-    const lo = Math.min(spacerExit, rttEntry);
-    const hi = Math.max(spacerExit, rttEntry);
-    for (let i = lo; i <= hi; i++) {
-      if (i >= 0 && i < L) { m[i].fwd.push('f-bridge'); m[i].rev.push('f-bridge'); }
-    }
-  }
-
   if (state.activeBystander) {
     for (const p of state.activeBystander.positions_forward) {
       if (p >= 0 && p < L) {

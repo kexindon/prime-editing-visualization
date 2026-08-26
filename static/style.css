@@ -443,11 +443,3 @@ table.bystanders td.mono { font-size: 11px; }
 .cell.to-scaffold::after   { top: -2px; right: -5px; }
 .cell.from-scaffold::after { bottom: -2px; left: -5px; }
 
-/* the duplex cells the scaffold spans: bold only, so it reads as a hint about
-   the guide rather than a feature of the DNA */
-/* Bold plus a faint rule underneath, so the eye can follow the strand from the
-   spacer across to the RTT without the bridge reading as a DNA feature. */
-.f-bridge {
-  font-weight: 700;
-  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--muted) 45%, transparent);
-}
