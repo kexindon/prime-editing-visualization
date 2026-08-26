@@ -33,6 +33,44 @@ _PEGG_DEV = os.environ.get('PEGG_PATH') or os.path.abspath(
 if os.path.isdir(os.path.join(_PEGG_DEV, 'pegg')):
     sys.path.insert(0, _PEGG_DEV)
 
+
+def _stub_cyvcf2_if_broken():
+    """
+    pegg.prime imports cyvcf2 at module level, but uses it in exactly one
+    function -- clinvar_VCF_translator(), for reading ClinVar VCFs -- which this
+    tool never calls. cyvcf2 is a compiled extension linked against htslib, and
+    a mismatched install raises ImportError on a missing symbol rather than
+    simply being absent, which would take the whole app down over a feature it
+    does not use.
+
+    So: try the real thing first, and only if it is unusable put a stub in
+    sys.modules so that PEGG's import succeeds. The stub's VCF raises if it is
+    ever actually called, so this can silently disable VCF reading but can never
+    silently return wrong data.
+    """
+    try:
+        import cyvcf2  # noqa: F401
+        return False
+    except Exception:
+        pass
+
+    import types
+
+    stub = types.ModuleType('cyvcf2')
+
+    def _unavailable(*args, **kwargs):
+        raise ImportError(
+            'cyvcf2 is not usable in this environment, so PEGG cannot read VCF '
+            'files here. This does not affect pegRNA design; only '
+            'pegg.prime.clinvar_VCF_translator() needs it.')
+
+    stub.VCF = _unavailable
+    sys.modules['cyvcf2'] = stub
+    return True
+
+
+CYVCF2_STUBBED = _stub_cyvcf2_if_broken()
+
 from pegg import prime, bystander
 
 

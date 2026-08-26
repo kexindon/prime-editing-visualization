@@ -6,6 +6,7 @@ All biology lives in pegg_bridge / PEGG itself.
 """
 
 import os
+import sys
 
 from flask import Flask, jsonify, render_template, request
 
@@ -146,7 +147,14 @@ def api_apply_rtt():
 
 @app.route('/api/health')
 def api_health():
-    return jsonify({'ok': True, 'pegg': pegg_bridge.PEGG_SOURCE})
+    return jsonify({
+        'ok': True,
+        'pegg': pegg_bridge.PEGG_SOURCE,
+        'python': sys.version.split()[0],
+        #true when cyvcf2 was unusable and stubbed out; harmless here, but worth
+        #surfacing rather than hiding, since it disables PEGG's VCF reading
+        'cyvcf2_stubbed': pegg_bridge.CYVCF2_STUBBED,
+    })
 
 
 def main():
