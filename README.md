@@ -48,7 +48,16 @@ pip install -r requirements.txt
 python run.py
 ```
 
-Then open <http://127.0.0.1:5000>.
+Then open <http://127.0.0.1:5050>.
+
+Port 5050 rather than Flask's usual 5000, because macOS runs its AirPlay
+Receiver on 5000 and Flask fails to bind there. Override with `PORT`, and use
+`HOST=0.0.0.0` to let others on the network reach it:
+
+```bash
+PORT=8080 python run.py
+HOST=0.0.0.0 python run.py      # reachable from other machines
+```
 
 PEGG must be importable. If it is not pip-installed, keep a `PEGG3.0` checkout
 next to this repository (the default), or point at one explicitly:
@@ -57,7 +66,8 @@ next to this repository (the default), or point at one explicitly:
 PEGG_PATH=/path/to/PEGG3.0 python run.py
 ```
 
-`/api/health` reports which copy of PEGG is actually in use.
+`/api/health` reports which copy of PEGG is actually in use, the Python version,
+and whether cyvcf2 had to be stubbed out (see requirements.txt).
 
 ## API
 

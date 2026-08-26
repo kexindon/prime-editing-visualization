@@ -157,9 +157,17 @@ def api_health():
     })
 
 
+#Not 5000: on macOS the AirPlay Receiver listens there by default, so Flask's
+#usual port fails with "Address already in use" on an otherwise idle machine.
+DEFAULT_PORT = 5050
+
+
 def main():
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='127.0.0.1', port=port, debug=bool(os.environ.get('PEGVIZ_DEBUG')))
+    port = int(os.environ.get('PORT', DEFAULT_PORT))
+    host = os.environ.get('HOST', '127.0.0.1')
+    print('\n  pegRNA Design Visualizer  ->  http://%s:%d\n'
+          % ('127.0.0.1' if host == '0.0.0.0' else host, port))
+    app.run(host=host, port=port, debug=bool(os.environ.get('PEGVIZ_DEBUG')))
 
 
 if __name__ == '__main__':
