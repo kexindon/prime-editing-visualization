@@ -375,34 +375,29 @@ summary { cursor: pointer; font-size: 12px; color: var(--accent); font-weight: 5
   border-bottom-color: var(--bystand);
 }
 
-/* expanded detail under the selected bystander row */
-tr.by-detail:hover { background: transparent; }
-tr.by-detail > td { padding: 0; }
-.by-detail-body {
-  padding: 11px 13px;
-  background: var(--bg);
-  border-left: 3px solid var(--bystand);
-  border-radius: 0 6px 6px 0;
-}
-.by-detail-body .kv { margin-bottom: 9px; }
-.by-prot { margin: 9px 0; }
-.by-prot .seqline { line-height: 1.6; }
-.by-prot .stop { color: var(--edit); font-weight: 700; }
 
 .legend-head { font-weight: 700; color: var(--ink) !important; margin-left: 4px; }
 .legend-head:first-child { margin-left: 0; }
 
-/* a bystander row that is expanded, vs the one currently drawn on the map */
-table.bystanders tr.open > td { border-bottom-color: transparent; }
-table.bystanders tr.open { background: var(--bg); }
 table.bystanders tr.active { background: var(--bystand-bg); }
 table.bystanders tr.active td:first-child::before {
   content: "▸ ";
   color: var(--bystand);
   font-weight: 800;
 }
-.by-detail-body button { margin-right: 8px; }
 
-/* the protein in a bystander panel must wrap, not be clipped by the row */
-.by-detail-body .seqline { word-break: break-all; white-space: normal; }
-.by-detail-body .kv dd { word-break: break-all; }
+
+/* per-row controls in the bystander table */
+td.by-actions { white-space: nowrap; text-align: right; }
+td.by-actions button {
+  padding: 3px 8px;
+  font-size: 11px;
+  margin-left: 5px;
+}
+td.by-actions button.on {
+  background: var(--bystand);
+  color: #fff;
+  border-color: var(--bystand);
+}
+/* the RTT column is the long one; let the row breathe instead */
+table.bystanders td.mono { font-size: 11px; }

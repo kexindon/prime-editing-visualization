@@ -32,7 +32,6 @@ const state = {
   designs: [],
   activeDesign: null,
   activeBystander: null,   // the one drawn on the map (the map holds one pegRNA)
-  expandedBy: new Set(),   // every row whose detail is open -- independent of it
   openDetails: new Set(),  // which designs' bystander tables are unfolded
   dragAnchor: null,
 };
@@ -792,41 +791,62 @@ function renderDesigns(data) {
       const tb = el('table', 'bystanders');
       const thead = el('thead');
       const hr = el('tr');
-      for (const t of ['Change', '#', 'Dist. to edit', 'PAM KO', 'RTT']) hr.appendChild(el('th', null, t));
+      for (const t of ['Change', '#', 'Dist. to edit', 'PAM KO', 'RTT', ''])
+        hr.appendChild(el('th', null, t));
       thead.appendChild(hr);
       tb.appendChild(thead);
 
       const body = el('tbody');
       for (const b of d.bystanders) {
         const tr = el('tr');
+        //Only the option currently drawn on the map is marked; every row is
+        //otherwise equal and independently actionable.
         if (state.activeBystander === b) tr.classList.add('active');
-        if (state.expandedBy.has(b)) tr.classList.add('open');
         tr.appendChild(el('td', 'mono', b.label));
         tr.appendChild(el('td', null, String(b.n_muts)));
         tr.appendChild(el('td', null, `${b.dist_to_edit} nt`));
         tr.appendChild(el('td', null, b.pam_disrupted ? 'yes' : '—'));
-        tr.appendChild(el('td', 'mono', b.rtt));
-        // Clicking a row opens ITS detail, and leaves any other open row open.
-        // Expansion used to be tied to the single "shown on map" slot, so only
-        // one option in the whole table could be inspected at a time and
-        // opening one collapsed the last.
-        tr.onclick = () => {
+        const rttCell = el('td', 'mono', b.rtt);
+        //The full oligo and the protein it makes, without spending a row on
+        //them: they are long, and mostly identical between options.
+        rttCell.title =
+          `Full pegRNA:\n${b.full_pegRNA}\n\n3' extension:\n${b.extension}` +
+          (b.protein ? `\n\nProtein:\n${b.protein}` : '');
+        tr.appendChild(rttCell);
+
+        //Every option gets its own controls. Previously these lived in a single
+        //expandable panel, so only one option per design could be put on the
+        //map or sent to the comparison box -- the other 37 were read-only.
+        const act = el('td', 'by-actions');
+        const shown = state.activeBystander === b;
+
+        const onMap = el('button', 'ghost' + (shown ? ' on' : ''),
+                         shown ? 'Hide' : 'Show on map');
+        onMap.title = 'Anneal this bystander\'s pegRNA onto the sequence map';
+        onMap.onclick = (ev) => {
+          ev.stopPropagation();
+          //The map holds one pegRNA at a time, so this is a radio, not a toggle
+          //per row: selecting one replaces whatever was shown.
           state.activeDesign = d;
-          if (state.expandedBy.has(b)) state.expandedBy.delete(b);
-          else state.expandedBy.add(b);
+          state.activeBystander = shown ? null : b;
           renderDesigns(data);
           render();
         };
-        body.appendChild(tr);
+        act.appendChild(onMap);
 
-        if (state.expandedBy.has(b)) {
-          const dr = el('tr', 'by-detail');
-          const td = el('td');
-          td.colSpan = 5;
-          td.appendChild(bystanderDetail(b, d));
-          dr.appendChild(td);
-          body.appendChild(dr);
-        }
+        const send = el('button', 'ghost', 'Send RTT');
+        send.title = 'Copy this RTT into the comparison box below';
+        send.onclick = (ev) => {
+          ev.stopPropagation();
+          $('rttInput').value = b.rtt;
+          $('rttOrient').value = 'peg';
+          state.activeDesign = d;
+          toast(`RTT for ${b.label} copied into the comparison box.`);
+        };
+        act.appendChild(send);
+
+        tr.appendChild(act);
+        body.appendChild(tr);
       }
       tb.appendChild(body);
       scroll.appendChild(tb);
@@ -836,66 +856,6 @@ function renderDesigns(data) {
 
     box.appendChild(card);
   }
-}
-
-/* Full detail for one silent bystander: the oligo, and the protein it makes. */
-function bystanderDetail(b, d) {
-  const wrap = el('div', 'by-detail-body');
-
-  const dl = el('dl', 'kv');
-  const put = (k, v) => { dl.appendChild(el('dt', null, k)); dl.appendChild(el('dd', null, v)); };
-  put('Silent change', b.label + `  (${b.n_muts} nt, ${b.dist_to_edit} nt from the edit)`);
-  put('Spacer', d.protospacer);
-  put('PBS', `${b.pbs}  (${d.pbs_length} nt)`);
-  put('RTT', `${b.rtt}  (${b.rtt.length} nt)`);
-  put('3′ extension', b.extension);
-  put('Full pegRNA', b.full_pegRNA);
-  put('PAM knocked out', b.pam_disrupted ? 'yes — reduces re-nicking' : 'no');
-  put('Position in sequence', b.positions_forward.map(p => p + 1).join(', '));
-  wrap.appendChild(dl);
-
-  // Protein, with the intended edit's protein alongside so "silent" is visible
-  // rather than asserted: the two differ only where the edit changes them.
-  if (b.protein) {
-    const pw = el('div', 'by-prot');
-    pw.appendChild(el('div', 'note', 'Protein from this pegRNA'));
-    const line = el('div', 'seqline');
-    const ref = (state.frame && state.frame.protein) || '';
-    for (let i = 0; i < b.protein.length; i++) {
-      const ch = b.protein[i];
-      const changed = ref[i] !== undefined && ref[i] !== ch;
-      line.appendChild(el('span', changed ? 'f-edit' : (ch === '*' ? 'stop' : null), ch));
-    }
-    pw.appendChild(line);
-    pw.appendChild(el('div', 'note',
-      'Red = changed by the intended edit. The silent bystander itself changes ' +
-      'no amino acid — that is what makes it silent.'));
-    wrap.appendChild(pw);
-  }
-
-  const shown = state.activeBystander === b;
-  const b0 = el('button', 'ghost', shown ? 'Hide from map' : 'Show on map');
-  b0.onclick = (ev) => {
-    ev.stopPropagation();
-    // The map draws one pegRNA, so this is a single slot even though any
-    // number of rows can be expanded at once.
-    state.activeDesign = d;
-    state.activeBystander = shown ? null : b;
-    rerenderDesigns();
-    render();
-  };
-  wrap.appendChild(b0);
-
-  const b1 = el('button', 'ghost', 'Send RTT to comparison');
-  b1.onclick = (ev) => {
-    ev.stopPropagation();
-    $('rttInput').value = b.rtt;
-    $('rttOrient').value = 'peg';
-    toast('Bystander RTT copied into the comparison box.');
-  };
-  wrap.appendChild(b1);
-
-  return wrap;
 }
 
 /* ---------- 5. RTT comparison ---------- */
