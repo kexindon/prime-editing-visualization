@@ -18,7 +18,8 @@ const LINE_WIDTH = 60;   // bases per row in the viewer
 // The PBS lies wholly inside the protospacer (it is complementary to the nicked
 // strand just 5' of the nick), and the RTT covers the PAM, so the containing
 // feature must lose to the contained one or it hides it completely.
-const FEATURE_PRIORITY = ['f-edit', 'f-by', 'f-pam', 'f-pbs', 'f-rtt', 'f-spacer'];
+const FEATURE_PRIORITY = ['f-edit', 'f-by', 'f-pam', 'f-pbs', 'f-rtt', 'f-spacer',
+                          'f-bridge'];
 
 const state = {
   sequence: '',
@@ -248,6 +249,22 @@ function featureMap() {
   add(state.editStart, Math.max(state.editEnd, state.editStart + 1), 'f-edit', '-');
 
   // silent bystander positions, if one is being previewed
+  //The scaffold is not drawn as a strand -- it does not anneal to anything --
+  //but the spacer and the RTT are two ends of one molecule, and with the two
+  //rows on opposite sides of the duplex nothing said so. Bold the duplex cells
+  //spanned between the spacer's 3' exit and the RTT's 5' entry, so the eye can
+  //follow the strand across the gap.
+  if (d) {
+    const st = d.strand;
+    const spacerExit = st === '+' ? d.protospacer_end - 1 : d.protospacer_start;
+    const rttEntry = st === '+' ? d.rtt_end - 1 : d.rtt_start;
+    const lo = Math.min(spacerExit, rttEntry);
+    const hi = Math.max(spacerExit, rttEntry);
+    for (let i = lo; i <= hi; i++) {
+      if (i >= 0 && i < L) { m[i].fwd.push('f-bridge'); m[i].rev.push('f-bridge'); }
+    }
+  }
+
   if (state.activeBystander) {
     for (const p of state.activeBystander.positions_forward) {
       if (p >= 0 && p < L) {
@@ -387,95 +404,6 @@ function render() {
   }
 
   renderLegend();
-  drawScaffoldLink(v);
-}
-
-/* The scaffold joins the spacer's 3' end to the RTT's 5' end. It anneals to
-   nothing, so it has no column of its own, and the two ends usually sit on
-   different rows and different sides of the duplex -- there is no cell path
-   between them to shade. Draw it as a real line over the viewer instead,
-   measured from where the two endpoint cells actually landed. */
-//+1 when the extension is drawn left-to-right, -1 when right-to-left. The
-//scaffold leaves the spacer on the side the RTT's 5' end is, so the connector
-//has to know this to route round the outside instead of back over the bases.
-function pegDir(viewer) {
-  const cells = [...viewer.querySelectorAll('.g-rtt-b')];
-  if (cells.length < 2) return 1;
-  const first = cells[0].getBoundingClientRect().left;
-  const last = cells[cells.length - 1].getBoundingClientRect().left;
-  return last >= first ? -1 : 1;
-}
-
-function drawScaffoldLink(viewer) {
-  const old = viewer.querySelector('svg.scaffold-link');
-  if (old) old.remove();
-
-  //Both ends of the scaffold, as they appear on the page. The spacer's 3' exit
-  //is one cell; the RTT's 5' entry is wherever the RTT run BEGINS in the
-  //strand's own direction, which -- because the extension runs antiparallel --
-  //is its right-hand end on a '+' design, and can be on a different row from
-  //the spacer since the RTT wraps.
-  const a = viewer.querySelector('[data-link="spacerEnd"]');
-  const rttCells = [...viewer.querySelectorAll('.g-rtt-b')];
-  if (!a || !rttCells.length) return;
-
-  //Take the extreme end of the RTT run on the side its 5' terminus lies, and
-  //prefer the row nearest the spacer so the line stays local rather than
-  //cutting across the whole map.
-  const rightward = pegDir(viewer) > 0;
-  const ay = a.getBoundingClientRect().top;
-  const rows = new Map();
-  for (const c of rttCells) {
-    const r = c.getBoundingClientRect();
-    const key = Math.round(r.top);
-    if (!rows.has(key)) rows.set(key, []);
-    rows.get(key).push({ c, x: r.left });
-  }
-  let bestRow = null;
-  for (const [top, cells] of rows) {
-    const dy = Math.abs(top - ay);
-    if (!bestRow || dy < bestRow.dy) bestRow = { dy, cells };
-  }
-  const b = bestRow.cells.reduce((m, o) =>
-    (rightward ? o.x > m.x : o.x < m.x) ? o : m).c;
-
-  const box = viewer.getBoundingClientRect();
-  const ra = a.getBoundingClientRect();
-  const rb = b.getBoundingClientRect();
-
-  //viewer-relative, and account for horizontal scrolling of a wide map
-  const x1 = ra.left - box.left + viewer.scrollLeft + ra.width / 2;
-  const y1 = ra.top - box.top + viewer.scrollTop + ra.height / 2;
-  const x2 = rb.left - box.left + viewer.scrollLeft + rb.width / 2;
-  const y2 = rb.top - box.top + viewer.scrollTop + rb.height / 2;
-
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'scaffold-link');
-  svg.setAttribute('width', viewer.scrollWidth);
-  svg.setAttribute('height', viewer.scrollHeight);
-
-  //Route the link AROUND the bases rather than across them: drop clear of the
-  //spacer's row, run sideways in the gap between rows, then rise into the RTT.
-  //A straight chord between the two ends cuts through every base in between and
-  //is unreadable on a wrapped map.
-  const gap = 9;                         //how far outside the rows to run
-  const belowA = y1 + gap;               //just under the spacer row
-  const aboveB = y2 - gap;               //just over the RTT row
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d',
-    `M ${x1} ${y1} V ${belowA} H ${x2} V ${y2}`);
-  path.setAttribute('class', 'scaffold-path');
-  svg.appendChild(path);
-
-  const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-  label.setAttribute('x', (x1 + x2) / 2);
-  label.setAttribute('y', belowA - 3);
-  label.setAttribute('text-anchor', 'middle');
-  label.setAttribute('class', 'scaffold-label');
-  label.textContent = 'scaffold';
-  svg.appendChild(label);
-
-  viewer.appendChild(svg);
 }
 
 function isCodonEdited(codon) {
@@ -607,7 +535,7 @@ function annealTrack(items, start, end, cls, seq, label, ends) {
     if (ends) {
       //the molecule's 5' start, and the point where it leaves for the scaffold
       if (i === ends.start) cell.classList.add('cap5');
-      if (i === ends.spacerEnd) { cell.classList.add('to-scaffold'); cell.dataset.link = 'spacerEnd'; }
+      if (i === ends.spacerEnd) cell.classList.add('to-scaffold');
     }
     if (it.ch !== null && seq[i] !== undefined && it.ch !== seq[i]) {
       cell.classList.add('mismatch');
@@ -667,7 +595,7 @@ function extensionTrack(pt, start, end, seq) {
 
     const e = pt.ends;
     //where the scaffold hands the strand back to the RTT
-    if (i === e.rttStart) { cell.classList.add('from-scaffold'); cell.dataset.link = 'rttStart'; }
+    if (i === e.rttStart) cell.classList.add('from-scaffold');
     //the pegRNA's single 3' terminus: the only arrowhead on the whole molecule
     if (i === e.terminus) {
       cell.classList.add('cap3', e.dir < 0 ? 'to-left' : 'to-right');
