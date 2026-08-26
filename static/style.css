@@ -346,6 +346,46 @@ summary { cursor: pointer; font-size: 12px; color: var(--accent); font-weight: 5
   border-bottom: 2px solid var(--rtt);
 }
 
+/* --- direction of synthesis -------------------------------------------------
+   The rails above are what make each segment read as one continuous strand.
+   These caps say which way it runs: a bar at the 5' end, an arrowhead at the
+   3' end. The extension runs antiparallel to the top strand, so its arrowhead
+   points LEFT while the spacer's points right -- that opposition is the point,
+   and is why the direction is taken from the molecule rather than the page. */
+
+.cell.cap5, .cell.cap3 { position: relative; }
+
+/* 5' end: a short perpendicular tick, like the tail of an arrow */
+.cell.cap5::before {
+  content: "";
+  position: absolute;
+  width: 2px;
+  height: 7px;
+  background: currentColor;
+}
+
+/* 3' end: an arrowhead on the rail, pointing the way the strand was made */
+.cell.cap3::after {
+  content: "";
+  position: absolute;
+  width: 0; height: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+/* Which way the arrow points comes from how the segment was actually drawn
+   (see `dir` in pegRNATracks), not from which segment it is: on a '-' strand
+   design every one of them is mirrored. */
+.g-spacer-b.cap3.to-right::after { top: -5px; right: -5px; border-left:  6px solid var(--spacer); }
+.g-spacer-b.cap3.to-left::after  { top: -5px; left:  -5px; border-right: 6px solid var(--spacer); }
+.g-pbs-b.cap3.to-right::after    { bottom: -5px; right: -5px; border-left:  6px solid var(--pbs); }
+.g-pbs-b.cap3.to-left::after     { bottom: -5px; left:  -5px; border-right: 6px solid var(--pbs); }
+.g-rtt-b.cap3.to-right::after    { bottom: -5px; right: -5px; border-left:  6px solid var(--rtt); }
+.g-rtt-b.cap3.to-left::after     { bottom: -5px; left:  -5px; border-right: 6px solid var(--rtt); }
+
+/* the 5' tick sits at whichever end the strand starts from */
+.g-spacer-b.cap5::before { top: -2px; }
+.g-rtt-b.cap5::before, .g-pbs-b.cap5::before { bottom: -2px; }
+
 /* a base the RTT templates differently from the reference: the edit itself,
    and any silent bystander it carries */
 .g-rtt-b.mismatch, .g-pbs-b.mismatch {
@@ -401,3 +441,21 @@ td.by-actions button.on {
 }
 /* the RTT column is the long one; let the row breathe instead */
 table.bystanders td.mono { font-size: 11px; }
+
+/* RTT and PBS abut at the nick: a tick on the rail marks the junction between
+   the two named parts, without implying the strand stops there. */
+.cell.join { position: relative; }
+.cell.join::before {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  width: 1px;
+  height: 5px;
+  background: var(--muted);
+  opacity: 0.55;
+}
+.g-rtt-b.join::before { left: 0; }
+.g-pbs-b.join::before { right: 0; }
+/* a cell that is both the RTT's 3' end and a junction keeps the junction tick
+   only -- the arrowhead belongs at the molecule's real 3' end, on the PBS */
+.g-rtt-b.join.cap5::before { background: currentColor; opacity: 1; height: 7px; }
