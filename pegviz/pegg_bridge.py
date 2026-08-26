@@ -507,12 +507,48 @@ def _design_one(seq, mut, cand, pam, rtt_length, pbs_length, proto_size,
                     'No synonymous change is available within %d nt of the edit.'
                     % window_nt)
 
+    #Reference bases the RTT overwrites; needed both to complete the bystanders
+    #below and to place the RTT on the forward strand further down.
+    ref_span_ = len(left_rtt) + ref_len + len(right_rtt)
+
+    #--- complete each bystander -------------------------------------------
+    #The PBS is only known once the PBS loop above has run, so the parts of a
+    #bystander that depend on it are filled in here rather than at construction.
+    #Without this a bystander could be highlighted but not actually used: it
+    #carried an RTT and nothing else, so there was no oligo to order and nothing
+    #to draw annealed onto the target.
+    pbs_pegRNA = revcomp(pbs_work)
+
+    #the product this design installs, and its protein -- the same treatment the
+    #bystanders get, so a design can be read without re-deriving it by hand
+    _f0 = to_forward(rtt_start, ref_span_)
+    design_edited = (seq[:_f0]
+                     + (rtt_fwd if orientation == '+' else revcomp(rtt_fwd))
+                     + seq[_f0 + ref_span_:])
+    design_protein = (reading_frame(design_edited, orf_start, '+')['protein']
+                      if orf_start is not None else None)
+
+    for b in bystanders:
+        b['pbs'] = pbs_pegRNA
+        b['extension'] = b['rtt'] + pbs_pegRNA
+        b['full_pegRNA'] = cand['protospacer'] + b['rtt'] + pbs_pegRNA
+
+        #the product this bystander installs, and what it codes for, so that the
+        #"silent" claim can be seen rather than taken on trust
+        b_edited = (seq[:to_forward(rtt_start, ref_span_)]
+                    + (b['rtt_sense'] if orientation == '+'
+                       else revcomp(b['rtt_sense']))
+                    + seq[to_forward(rtt_start, ref_span_) + ref_span_:])
+        b['edited_sequence'] = b_edited
+        if orf_start is not None:
+            b['protein'] = reading_frame(b_edited, orf_start, '+')['protein']
+
     #--- map every feature back onto the forward strand --------------------
     #The reference span the RTT overwrites is NOT len(RTT): the RTT carries the
     #alt allele, so for an indel it is longer (insertion) or shorter (deletion)
     #than the reference it replaces. Report the span explicitly so that anything
     #re-installing the RTT does not have to infer it and get indels wrong.
-    ref_span = len(left_rtt) + ref_len + len(right_rtt)
+    ref_span = ref_span_
     rtt_f_start = to_forward(rtt_start, ref_span)
     pbs_f_start = to_forward(rtt_start - pbs_length, pbs_length)
     left_arm_f = to_forward(rtt_start, len(left_rtt)) if len(left_rtt) else rtt_f_start
@@ -557,6 +593,9 @@ def _design_one(seq, mut, cand, pam, rtt_length, pbs_length, proto_size,
         'RHA': len(right_rtt),
         'PAM_disrupted': bool(pam_disrupted),
         'proto_disrupted': bool(proto_disrupted),
+
+        'edited_sequence': design_edited,
+        'protein': design_protein,
 
         'bystanders': bystanders,
         'bystander_note': bystander_note,

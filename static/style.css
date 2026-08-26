@@ -359,3 +359,25 @@ summary { cursor: pointer; font-size: 12px; color: var(--accent); font-weight: 5
   font-size: 9px;
   color: var(--muted);
 }
+
+/* a silent bystander's own change, kept visually distinct from the edit */
+.g-rtt-b.by-mismatch, .g-pbs-b.by-mismatch {
+  background: var(--bystand-bg);
+  color: var(--bystand);
+  font-weight: 800;
+  border-bottom-color: var(--bystand);
+}
+
+/* expanded detail under the selected bystander row */
+tr.by-detail:hover { background: transparent; }
+tr.by-detail > td { padding: 0; }
+.by-detail-body {
+  padding: 11px 13px;
+  background: var(--bg);
+  border-left: 3px solid var(--bystand);
+  border-radius: 0 6px 6px 0;
+}
+.by-detail-body .kv { margin-bottom: 9px; }
+.by-prot { margin: 9px 0; }
+.by-prot .seqline { line-height: 1.6; }
+.by-prot .stop { color: var(--edit); font-weight: 700; }

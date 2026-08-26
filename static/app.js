@@ -278,7 +278,18 @@ function render() {
   const nicks = nickPositions();
   //the pegRNA drawn as a molecule annealed to the target, rather than as
   //shading on the target's own bases
-  const pt = pegRNATracks(state.activeDesign);
+  // When a bystander is selected, draw ITS pegRNA rather than the unmodified
+  // one: same spacer, PBS and geometry, but the bystander's RTT. Previously the
+  // selection only tinted the changed positions, so the extension on the map
+  // still showed the plain design and the silent changes could not be read off
+  // it at all.
+  const pt = pegRNATracks(
+    state.activeBystander
+      ? Object.assign({}, state.activeDesign, {
+          rtt: state.activeBystander.rtt,
+          rtt_sense: state.activeBystander.rtt_sense,
+        })
+      : state.activeDesign);
   const showAA = $('showProtein').checked && state.frame;
 
   // codon lookup by forward-strand start offset, for the protein track
@@ -517,8 +528,12 @@ function extensionTrack(pt, start, end, seq) {
                                         : complement(seq[i] || 'N');
 
     if (seq[i] !== undefined && it.ch !== expect) {
-      cell.classList.add('mismatch');
-      cell.title = (isPbs ? 'PBS' : 'RTT') + ' mismatch: target ' + seq[i] +
+      // Separate the intended edit from a silent bystander, so the map says
+      // which is which instead of showing one undifferentiated red.
+      const isBy = state.activeBystander &&
+                   state.activeBystander.positions_forward.includes(i);
+      cell.classList.add(isBy ? 'by-mismatch' : 'mismatch');
+      cell.title = (isBy ? 'silent bystander' : 'edit') + ': target ' + seq[i] +
                    ' · pegRNA ' + it.ch + ' → installs ' +
                    (it.expect === 'same' ? it.ch : complement(it.ch));
     } else {
@@ -681,6 +696,35 @@ function renderDesigns(data) {
     put('RHA', `${d.RHA} nt`);
     card.appendChild(dl);
 
+    // What this design actually produces, translated. Without it the card gave
+    // sequences to order but no way to see the consequence of ordering them.
+    if (d.protein) {
+      const pw = el('div', 'by-prot');
+      pw.appendChild(el('div', 'note', 'Protein after editing'));
+      const line = el('div', 'seqline');
+      const ref = (state.frame && state.frame.protein) || '';
+      let nChanged = 0;
+      for (let i = 0; i < d.protein.length; i++) {
+        const ch = d.protein[i];
+        const changed = ref[i] !== undefined && ref[i] !== ch;
+        if (changed) nChanged++;
+        line.appendChild(el('span', changed ? 'f-edit' : (ch === '*' ? 'stop' : null), ch));
+      }
+      pw.appendChild(line);
+
+      // name the substitutions the way a variant normally reads (E20K)
+      const calls = [];
+      for (let i = 0; i < Math.min(ref.length, d.protein.length); i++) {
+        if (ref[i] !== d.protein[i]) calls.push(`${ref[i]}${i + 1}${d.protein[i]}`);
+      }
+      pw.appendChild(el('div', 'note',
+        calls.length ? 'Change: ' + calls.join(', ')
+                     : (ref.length === d.protein.length
+                        ? 'Silent — protein unchanged'
+                        : 'Length changed — likely frameshift')));
+      card.appendChild(pw);
+    }
+
     const show = el('button', 'ghost', 'Show on map');
     show.onclick = () => {
       state.activeDesign = d;
@@ -732,6 +776,19 @@ function renderDesigns(data) {
           render();
         };
         body.appendChild(tr);
+
+        // The selected option expands into the same detail a design gets: the
+        // full oligo to order, and the protein it produces. A bystander is only
+        // useful if it can be ordered and checked, and the row alone showed
+        // neither.
+        if (state.activeBystander === b) {
+          const dr = el('tr', 'by-detail');
+          const td = el('td');
+          td.colSpan = 5;
+          td.appendChild(bystanderDetail(b, d));
+          dr.appendChild(td);
+          body.appendChild(dr);
+        }
       }
       tb.appendChild(body);
       scroll.appendChild(tb);
@@ -741,6 +798,53 @@ function renderDesigns(data) {
 
     box.appendChild(card);
   }
+}
+
+/* Full detail for one silent bystander: the oligo, and the protein it makes. */
+function bystanderDetail(b, d) {
+  const wrap = el('div', 'by-detail-body');
+
+  const dl = el('dl', 'kv');
+  const put = (k, v) => { dl.appendChild(el('dt', null, k)); dl.appendChild(el('dd', null, v)); };
+  put('Silent change', b.label + `  (${b.n_muts} nt, ${b.dist_to_edit} nt from the edit)`);
+  put('Spacer', d.protospacer);
+  put('PBS', `${b.pbs}  (${d.pbs_length} nt)`);
+  put('RTT', `${b.rtt}  (${b.rtt.length} nt)`);
+  put('3′ extension', b.extension);
+  put('Full pegRNA', b.full_pegRNA);
+  put('PAM knocked out', b.pam_disrupted ? 'yes — reduces re-nicking' : 'no');
+  put('Position on map', b.positions_forward.map(p => p + 1).join(', '));
+  wrap.appendChild(dl);
+
+  // Protein, with the intended edit's protein alongside so "silent" is visible
+  // rather than asserted: the two differ only where the edit changes them.
+  if (b.protein) {
+    const pw = el('div', 'by-prot');
+    pw.appendChild(el('div', 'note', 'Protein from this pegRNA'));
+    const line = el('div', 'seqline');
+    const ref = (state.frame && state.frame.protein) || '';
+    for (let i = 0; i < b.protein.length; i++) {
+      const ch = b.protein[i];
+      const changed = ref[i] !== undefined && ref[i] !== ch;
+      line.appendChild(el('span', changed ? 'f-edit' : (ch === '*' ? 'stop' : null), ch));
+    }
+    pw.appendChild(line);
+    pw.appendChild(el('div', 'note',
+      'Red = changed by the intended edit. The silent bystander itself changes ' +
+      'no amino acid — that is what makes it silent.'));
+    wrap.appendChild(pw);
+  }
+
+  const b1 = el('button', 'ghost', 'Send RTT to comparison');
+  b1.onclick = (ev) => {
+    ev.stopPropagation();
+    $('rttInput').value = b.rtt;
+    $('rttOrient').value = 'peg';
+    toast('Bystander RTT copied into the comparison box.');
+  };
+  wrap.appendChild(b1);
+
+  return wrap;
 }
 
 /* ---------- 5. RTT comparison ---------- */
