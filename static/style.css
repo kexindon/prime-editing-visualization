@@ -309,3 +309,53 @@ summary { cursor: pointer; font-size: 12px; color: var(--accent); font-weight: 5
   .cell.sel-target:hover { background: #343a42; }
   .error { background: #4a1a1a; color: #fca5a5; border-color: #7f1d1d; }
 }
+
+/* --- pegRNA drawn as a molecule annealed to the target ---------------------
+   These are separate rows rather than shading on the target's bases, because
+   the pegRNA's parts overlap on the target: the PBS pairs inside the
+   protospacer, and the RTT covers the PAM. One background per base cannot show
+   both, which previously left the 19 nt spacer visible as only 3 nt. */
+
+.track.g-spacer, .track.g-pbs, .track.g-rtt {
+  height: 16px;
+  white-space: nowrap;
+}
+
+/* the spacer sits against the strand it pairs with */
+.g-spacer-b {
+  background: var(--spacer-bg);
+  color: var(--spacer);
+  border-top: 2px solid var(--spacer);
+}
+.g-pbs-b {
+  background: var(--pbs-bg);
+  color: var(--pbs);
+  font-weight: 600;
+  border-bottom: 2px solid var(--pbs);
+}
+.g-rtt-b {
+  background: var(--rtt-bg);
+  color: var(--rtt);
+  border-bottom: 2px solid var(--rtt);
+}
+
+/* a base the RTT templates differently from the reference: the edit itself,
+   and any silent bystander it carries */
+.g-rtt-b.mismatch, .g-pbs-b.mismatch {
+  background: var(--edit-bg);
+  color: var(--edit);
+  font-weight: 800;
+  border-bottom-color: var(--edit);
+}
+
+/* PBS and RTT are one continuous 3' extension sharing a single row */
+.track.g-ext { height: 16px; }
+
+/* row labels in the left gutter */
+.track[data-label]::before {
+  content: attr(data-label);
+  position: absolute;
+  left: 0;
+  font-size: 9px;
+  color: var(--muted);
+}

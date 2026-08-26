@@ -276,6 +276,9 @@ function render() {
 
   const fm = featureMap();
   const nicks = nickPositions();
+  //the pegRNA drawn as a molecule annealed to the target, rather than as
+  //shading on the target's own bases
+  const pt = pegRNATracks(state.activeDesign);
   const showAA = $('showProtein').checked && state.frame;
 
   // codon lookup by forward-strand start offset, for the protein track
@@ -313,10 +316,30 @@ function render() {
       block.appendChild(aaTrack);
     }
 
+    // The spacer anneals to the strand OPPOSITE the PAM, and the PBS/RTT to the
+    // PAM strand itself, so each pegRNA part is drawn against the strand it
+    // actually pairs with: outside the duplex for the spacer, and on the PAM
+    // side for the extension.
+    const pegOnFwd = pt && pt.strand === '+';
+
+    if (pt && !pegOnFwd && hasOn(pt.spacer, start, end)) {
+      block.appendChild(annealTrack(pt.spacer, start, end, 'g-spacer', seq));
+    }
+
     // forward strand
     block.appendChild(strandTrack(seq, start, end, fm, 'fwd', nicks, '+'));
     // reverse strand (complement, displayed 5'->3' left-to-right of the top strand)
     block.appendChild(strandTrack(complement(seq), start, end, fm, 'rev', nicks, '-'));
+
+    if (pt && pegOnFwd && hasOn(pt.spacer, start, end)) {
+      block.appendChild(annealTrack(pt.spacer, start, end, 'g-spacer', seq));
+    }
+    // PBS and RTT form ONE continuous 3' extension, meeting exactly at the nick
+    // (pbs_end == nick == rtt_start), so they share a single row. Drawing them
+    // on separate rows made the extension look like two detached fragments.
+    if (pt && (hasOn(pt.pbs, start, end) || hasOn(pt.rtt, start, end))) {
+      block.appendChild(extensionTrack(pt, start, end, seq));
+    }
 
     // protein track below, for '-' strand frames
     if (showAA && state.frame.strand === '-') {
@@ -352,6 +375,119 @@ function complement(s) {
   let o = '';
   for (const c of s) o += (M[c] || 'N');
   return o;
+}
+
+/* ---------- pegRNA annealing ----------
+
+   Shading bases can only ever show one feature per base, and the pegRNA's parts
+   genuinely overlap on the target: the PBS is complementary to the 13 nt
+   immediately 5' of the nick, which lie INSIDE the protospacer, and the RTT
+   covers the PAM. Colouring alone therefore hides whichever feature loses, and
+   the spacer all but disappears behind the PBS and RTT.
+
+   So draw the pegRNA as its own molecule instead, laid over the target the way
+   it actually base-pairs:
+
+       spacer     : 5'-G+19 nt-3', paired with the strand OPPOSITE the PAM
+                    (the protospacer strand carries the PAM; the spacer anneals
+                    to its complement)
+       PBS        : paired with the 3' end of the nicked strand, 5' of the nick
+       RTT        : templates new DNA 3' of the nick, so it is shown against the
+                    reference it replaces, with edited bases called out
+
+   Each returns an array of {i, ch} in forward-strand coordinates so the tracks
+   line up with the DNA rows above them at any line width. */
+
+function pegRNATracks(d) {
+  if (!d) return null;
+  const L = state.sequence.length;
+
+  // The spacer as synthesised is 'G' + 19 nt; the leading G is a transcription
+  // requirement and is not necessarily templated by the genome, so it is drawn
+  // only when it matches. protospacer_start/end span the 19 genomic nt.
+  const spacerSeq = d.protospacer;                 // 'G' + 19 nt, 5'->3'
+  const genomic = spacerSeq.slice(1);              // the 19 nt that pair
+
+  const spacer = [];
+  for (let k = 0; k < genomic.length; k++) {
+    // walk 5'->3' along the PAM strand
+    const i = d.strand === '+' ? d.protospacer_start + k
+                               : d.protospacer_end - 1 - k;
+    if (i >= 0 && i < L) spacer.push({ i, ch: genomic[k] });
+  }
+
+  // PBS: reverse complement of the bases 5' of the nick on the PAM strand, so
+  // as drawn against the PAM strand it reads as that strand's own sequence.
+  const pbs = [];
+  for (let k = 0; k < d.pbs_length; k++) {
+    const i = d.strand === '+' ? d.pbs_start + k : d.pbs_end - 1 - k;
+    if (i >= 0 && i < L) pbs.push({ i, ch: null });   // filled from the target
+  }
+
+  // RTT: the new strand it templates, in PAM-strand orientation.
+  const rttSense = d.rtt_sense || '';
+  const rtt = [];
+  for (let k = 0; k < rttSense.length; k++) {
+    const i = d.strand === '+' ? d.rtt_start + k : d.rtt_end - 1 - k;
+    if (i >= 0 && i < L) rtt.push({ i, ch: rttSense[k] });
+  }
+
+  return { spacer, pbs, rtt, strand: d.strand };
+}
+
+/* One track row: sparse cells placed at their forward-strand column. */
+function annealTrack(items, start, end, cls, seq, label) {
+  const track = el('div', 'track ' + cls);
+  const byCol = new Map();
+  for (const it of items) byCol.set(it.i, it);
+
+  for (let i = start; i < end; i++) {
+    const it = byCol.get(i);
+    if (!it) { track.appendChild(el('span', 'cell')); continue; }
+    // a null char means "same as the target here" (PBS pairs with the template)
+    const ch = it.ch === null ? seq[i] : it.ch;
+    const cell = el('span', 'cell ' + cls + '-b', ch);
+    if (it.ch !== null && seq[i] !== undefined && it.ch !== seq[i]) {
+      cell.classList.add('mismatch');
+      cell.title = 'templated change: ' + seq[i] + ' → ' + it.ch;
+    }
+    track.appendChild(cell);
+  }
+  if (label) track.dataset.label = label;
+  return track;
+}
+
+/* Does this track have anything to show on this line? */
+function hasOn(items, start, end) {
+  return items.some(it => it.i >= start && it.i < end);
+}
+
+/* The 3' extension as one row: PBS then RTT, which abut at the nick.
+   Keeping them in a single track is what makes the extension read as one
+   molecule rather than two loose pieces. */
+function extensionTrack(pt, start, end, seq) {
+  const track = el('div', 'track g-ext');
+  const pbsAt = new Map(pt.pbs.map(it => [it.i, it]));
+  const rttAt = new Map(pt.rtt.map(it => [it.i, it]));
+
+  for (let i = start; i < end; i++) {
+    const p = pbsAt.get(i);
+    const r = rttAt.get(i);
+    if (!p && !r) { track.appendChild(el('span', 'cell')); continue; }
+
+    const isPbs = !!p;
+    const it = p || r;
+    const ch = it.ch === null ? seq[i] : it.ch;
+    const cell = el('span', 'cell ' + (isPbs ? 'g-pbs-b' : 'g-rtt-b'), ch);
+
+    if (!isPbs && seq[i] !== undefined && it.ch !== seq[i]) {
+      cell.classList.add('mismatch');
+      cell.title = 'templated change: ' + seq[i] + ' → ' + it.ch;
+    }
+    cell.title = cell.title || (isPbs ? 'PBS' : 'RTT');
+    track.appendChild(cell);
+  }
+  return track;
 }
 
 function strandTrack(seqStr, start, end, fm, kind, nicks, strandKey) {
