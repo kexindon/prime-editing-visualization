@@ -416,21 +416,47 @@ function pegRNATracks(d) {
     if (i >= 0 && i < L) spacer.push({ i, ch: genomic[k] });
   }
 
-  // PBS: reverse complement of the bases 5' of the nick on the PAM strand, so
-  // as drawn against the PAM strand it reads as that strand's own sequence.
-  const pbs = [];
-  for (let k = 0; k < d.pbs_length; k++) {
-    const i = d.strand === '+' ? d.pbs_start + k : d.pbs_end - 1 - k;
-    if (i >= 0 && i < L) pbs.push({ i, ch: null });   // filled from the target
-  }
+  // The 3' extension (PBS then RTT) is part of the pegRNA, so it carries the
+  // pegRNA's OWN bases and runs ANTIPARALLEL to the PAM strand: it is laid down
+  // 3'->5' along it, base-paired with what it covers.
+  //
+  // d.pbs and d.rtt are already in that pegRNA orientation (PEGG reverse
+  // complements both before returning them). Walking them 5'->3' therefore
+  // means stepping BACKWARDS along the PAM strand, i.e. the extension's 5' end
+  // sits at the far end of the RTT and its 3' end at the far end of the PBS.
+  //
+  // Drawing d.rtt_sense here instead -- the new DNA the RTT templates -- showed
+  // the product strand rather than the pegRNA, and drawing the PBS from the
+  // target's own bases showed the target rather than the pegRNA. Both are now
+  // the pegRNA's real sequence, complementary to the strand beneath them.
+  const pbsSeq = d.pbs || '';
+  const rttSeq = d.rtt || '';
 
-  // RTT: the new strand it templates, in PAM-strand orientation.
-  const rttSense = d.rtt_sense || '';
-  const rtt = [];
-  for (let k = 0; k < rttSense.length; k++) {
-    const i = d.strand === '+' ? d.rtt_start + k : d.rtt_end - 1 - k;
-    if (i >= 0 && i < L) rtt.push({ i, ch: rttSense[k] });
-  }
+  // PEGG returns both already reverse complemented onto the PAM strand, so how
+  // they lie against the FORWARD strand depends on which strand carries the PAM:
+  //
+  //   PAM on '+' : the string runs backwards along the forward strand, and each
+  //                base pairs with complement(forward[i])
+  //   PAM on '-' : the PAM strand is itself the reverse complement, so the two
+  //                reversals cancel -- the string runs forwards, and each base
+  //                equals forward[i]
+  //
+  // Verified both ways against every design: PBS pairs perfectly (0 mismatches)
+  // and the RTT mismatches only where it installs something.
+  const fwdPam = d.strand === '+';
+  const lay = (str, lo, hi) => {
+    const out = [];
+    for (let k = 0; k < str.length; k++) {
+      const i = fwdPam ? hi - 1 - k : lo + k;
+      if (i >= 0 && i < L) {
+        out.push({ i, ch: str[k], expect: fwdPam ? null : 'same' });
+      }
+    }
+    return out;
+  };
+
+  const pbs = lay(pbsSeq, d.pbs_start, d.pbs_end);
+  const rtt = lay(rttSeq, d.rtt_start, d.rtt_end);
 
   return { spacer, pbs, rtt, strand: d.strand };
 }
@@ -477,14 +503,27 @@ function extensionTrack(pt, start, end, seq) {
 
     const isPbs = !!p;
     const it = p || r;
-    const ch = it.ch === null ? seq[i] : it.ch;
-    const cell = el('span', 'cell ' + (isPbs ? 'g-pbs-b' : 'g-rtt-b'), ch);
+    const cell = el('span', 'cell ' + (isPbs ? 'g-pbs-b' : 'g-rtt-b'), it.ch);
 
-    if (!isPbs && seq[i] !== undefined && it.ch !== seq[i]) {
+    // What the extension should read here if it pairs perfectly. Both the PBS
+    // and the RTT are complementary to the PAM strand, so on a '+' design that
+    // is complement(forward), and on a '-' design the PAM strand is already the
+    // reverse complement, making the expected base the forward base itself.
+    // (Using complement() unconditionally flagged all 13 PBS bases as
+    // mismatches on '+' designs.)
+    // 'same' when the PAM is on the reverse strand: the two reversals cancel
+    // and the pegRNA base equals the forward base rather than its complement.
+    const expect = it.expect === 'same' ? (seq[i] || 'N')
+                                        : complement(seq[i] || 'N');
+
+    if (seq[i] !== undefined && it.ch !== expect) {
       cell.classList.add('mismatch');
-      cell.title = 'templated change: ' + seq[i] + ' → ' + it.ch;
+      cell.title = (isPbs ? 'PBS' : 'RTT') + ' mismatch: target ' + seq[i] +
+                   ' · pegRNA ' + it.ch + ' → installs ' +
+                   (it.expect === 'same' ? it.ch : complement(it.ch));
+    } else {
+      cell.title = (isPbs ? 'PBS' : 'RTT') + ' · pairs with ' + seq[i];
     }
-    cell.title = cell.title || (isPbs ? 'PBS' : 'RTT');
     track.appendChild(cell);
   }
   return track;
