@@ -492,8 +492,13 @@ def _design_one(seq, mut, cand, pam, rtt_length, pbs_length, proto_size,
                     _w = rtt_offset_to_ref(_p)
                     _fwd[_p] = None if _w is None else to_forward(_w)
 
+                #Sorted by position in the sequence, so a multi-change label
+                #reads in the same order as the coordinates beside it. On a '-'
+                #strand design RTT order runs backwards along the sequence, which
+                #otherwise listed "G66A, G60A" against positions "60, 66".
                 changes = []
-                for _p in opt['positions']:
+                for _p in sorted(opt['positions'],
+                                 key=lambda q: (_fwd[q] is None, _fwd[q], q)):
                     _f = _fwd[_p]
                     _where = ('%d' % (_f + 1)) if _f is not None else ('RTT+%d' % _p)
                     changes.append('%s%s%s' % (rtt_fwd[_p], _where, new_rtt_fwd[_p]))
