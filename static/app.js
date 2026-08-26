@@ -347,8 +347,7 @@ function render() {
       block.appendChild(extensionTrack(pt, start, end, seq));
     }
     if (pt && !pamTop && hasOn(pt.spacer, start, end)) {
-      block.appendChild(annealTrack(pt.spacer, start, end, 'g-spacer', seq,
-                                    null, pt.caps.spacer));
+      block.appendChild(annealTrack(pt.spacer, start, end, 'g-spacer', seq));
     }
 
     // forward strand
@@ -358,8 +357,7 @@ function render() {
 
     // below the duplex
     if (pt && pamTop && hasOn(pt.spacer, start, end)) {
-      block.appendChild(annealTrack(pt.spacer, start, end, 'g-spacer', seq,
-                                    null, pt.caps.spacer));
+      block.appendChild(annealTrack(pt.spacer, start, end, 'g-spacer', seq));
     }
     if (pt && !pamTop && ext) {
       block.appendChild(extensionTrack(pt, start, end, seq));
@@ -482,29 +480,11 @@ function pegRNATracks(d) {
   const pbs = lay(pbsSeq, d.pbs_start, d.pbs_end);
   const rtt = lay(rttSeq, d.rtt_start, d.rtt_end);
 
-  //Which drawn cell is each segment's 5' and 3' end, in screen terms. The
-  //extension runs antiparallel to the top strand, so on a '+' design its 3'
-  //end is the LEFT-most cell even though the string starts at the right; the
-  //arrowhead has to follow the molecule, not the page.
-  //`dir` is which way the strand runs across the page: +1 left-to-right,
-  //-1 right-to-left. Taken from the drawn cells, so it stays correct on a '-'
-  //design where every segment is mirrored.
-  const cap = (arr) => arr.length
-    ? {
-        five: arr[0].i,
-        three: arr[arr.length - 1].i,
-        dir: arr.length > 1 && arr[arr.length - 1].i < arr[0].i ? -1 : 1,
-      }
-    : null;
-
-  return {
-    spacer, pbs, rtt, strand: d.strand,
-    caps: { spacer: cap(spacer), pbs: cap(pbs), rtt: cap(rtt) },
-  };
+  return { spacer, pbs, rtt, strand: d.strand };
 }
 
 /* One track row: sparse cells placed at their forward-strand column. */
-function annealTrack(items, start, end, cls, seq, label, caps) {
+function annealTrack(items, start, end, cls, seq, label) {
   const track = el('div', 'track ' + cls);
   const byCol = new Map();
   for (const it of items) byCol.set(it.i, it);
@@ -515,12 +495,6 @@ function annealTrack(items, start, end, cls, seq, label, caps) {
     // a null char means "same as the target here" (PBS pairs with the template)
     const ch = it.ch === null ? seq[i] : it.ch;
     const cell = el('span', 'cell ' + cls + '-b', ch);
-    if (caps) {
-      if (i === caps.five) cell.classList.add('cap5');
-      if (i === caps.three) {
-        cell.classList.add('cap3', caps.dir < 0 ? 'to-left' : 'to-right');
-      }
-    }
     if (it.ch !== null && seq[i] !== undefined && it.ch !== seq[i]) {
       cell.classList.add('mismatch');
       cell.title = 'templated change: ' + seq[i] + ' → ' + it.ch;
@@ -575,19 +549,6 @@ function extensionTrack(pt, start, end, seq) {
                    (it.expect === 'same' ? it.ch : complement(it.ch));
     } else {
       cell.title = (isPbs ? 'PBS' : 'RTT') + ' · pairs with ' + seq[i];
-    }
-
-    //Direction. The extension is one molecule: RTT 5'->3' into PBS, ending at
-    //the pegRNA's 3' terminus. Mark the two ends so the reader can see which
-    //way it was synthesised rather than inferring it from the sequence.
-    const c = pt.caps;
-    //RTT and PBS are one continuous strand meeting at the nick; mark the seam
-    //so it reads as a junction between two named parts rather than a break.
-    if (c.rtt && i === c.rtt.three) cell.classList.add('join');
-    if (c.pbs && i === c.pbs.five) cell.classList.add('join');
-    if (c.rtt && i === c.rtt.five) cell.classList.add('cap5');
-    if (c.pbs && i === c.pbs.three) {
-      cell.classList.add('cap3', c.pbs.dir < 0 ? 'to-left' : 'to-right');
     }
     track.appendChild(cell);
   }
@@ -678,9 +639,6 @@ function renderLegend() {
   pam.appendChild(document.createTextNode('PAM'));
   L.appendChild(pam);
   L.appendChild(el('span', null, '│ = nick site'));
-  //Say what the rails mean, since they now carry direction as well as extent.
-  L.appendChild(el('span', 'legend-head', 'pegRNA runs:'));
-  L.appendChild(el('span', null, '┤ 5′ → 3′ ▶  (spacer, then RTT into PBS)'));
 }
 
 /* ---------- 4. pegRNA design ---------- */
