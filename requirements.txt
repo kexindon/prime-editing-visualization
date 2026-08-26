@@ -1,0 +1,5 @@
+flask>=2.0
+biopython>=1.80
+# PEGG supplies the design logic. Install it, or keep a PEGG3.0 checkout beside
+# this repo (or set PEGG_PATH) and it will be imported from there.
+# pegg>=3.0
