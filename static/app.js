@@ -31,7 +31,9 @@ const state = {
   altSeq: '',
   designs: [],
   activeDesign: null,
-  activeBystander: null,
+  activeBystander: null,   // the one drawn on the map (the map holds one pegRNA)
+  expandedBy: new Set(),   // every row whose detail is open -- independent of it
+  openDetails: new Set(),  // which designs' bystander tables are unfolded
   dragAnchor: null,
 };
 
@@ -684,7 +686,16 @@ async function runDesign() {
   }
 }
 
+//The last payload rendered, so a control nested inside a row can re-render the
+//list without having to thread `data` down through every call site.
+let _lastDesignData = null;
+
+function rerenderDesigns() {
+  if (_lastDesignData) renderDesigns(_lastDesignData);
+}
+
 function renderDesigns(data) {
+  _lastDesignData = data;
   const box = $('designOut');
   box.innerHTML = '';
 
@@ -767,6 +778,13 @@ function renderDesigns(data) {
 
     if (d.bystanders && d.bystanders.length) {
       const det = el('details');
+      //Re-rendering rebuilds the table, which would otherwise snap every open
+      //<details> shut the moment a row inside it was clicked.
+      det.open = state.openDetails.has(d.id);
+      det.addEventListener('toggle', () => {
+        if (det.open) state.openDetails.add(d.id);
+        else state.openDetails.delete(d.id);
+      });
       det.appendChild(el('summary', null,
         `${d.bystanders.length} silent bystander option${d.bystanders.length === 1 ? '' : 's'}`));
 
@@ -782,25 +800,26 @@ function renderDesigns(data) {
       for (const b of d.bystanders) {
         const tr = el('tr');
         if (state.activeBystander === b) tr.classList.add('active');
+        if (state.expandedBy.has(b)) tr.classList.add('open');
         tr.appendChild(el('td', 'mono', b.label));
         tr.appendChild(el('td', null, String(b.n_muts)));
         tr.appendChild(el('td', null, `${b.dist_to_edit} nt`));
         tr.appendChild(el('td', null, b.pam_disrupted ? 'yes' : '—'));
         tr.appendChild(el('td', 'mono', b.rtt));
+        // Clicking a row opens ITS detail, and leaves any other open row open.
+        // Expansion used to be tied to the single "shown on map" slot, so only
+        // one option in the whole table could be inspected at a time and
+        // opening one collapsed the last.
         tr.onclick = () => {
           state.activeDesign = d;
-          state.activeBystander = (state.activeBystander === b) ? null : b;
-          $('rttInput').value = b.rtt;
+          if (state.expandedBy.has(b)) state.expandedBy.delete(b);
+          else state.expandedBy.add(b);
           renderDesigns(data);
           render();
         };
         body.appendChild(tr);
 
-        // The selected option expands into the same detail a design gets: the
-        // full oligo to order, and the protein it produces. A bystander is only
-        // useful if it can be ordered and checked, and the row alone showed
-        // neither.
-        if (state.activeBystander === b) {
+        if (state.expandedBy.has(b)) {
           const dr = el('tr', 'by-detail');
           const td = el('td');
           td.colSpan = 5;
@@ -832,7 +851,7 @@ function bystanderDetail(b, d) {
   put('3′ extension', b.extension);
   put('Full pegRNA', b.full_pegRNA);
   put('PAM knocked out', b.pam_disrupted ? 'yes — reduces re-nicking' : 'no');
-  put('Position on map', b.positions_forward.map(p => p + 1).join(', '));
+  put('Position in sequence', b.positions_forward.map(p => p + 1).join(', '));
   wrap.appendChild(dl);
 
   // Protein, with the intended edit's protein alongside so "silent" is visible
@@ -853,6 +872,19 @@ function bystanderDetail(b, d) {
       'no amino acid — that is what makes it silent.'));
     wrap.appendChild(pw);
   }
+
+  const shown = state.activeBystander === b;
+  const b0 = el('button', 'ghost', shown ? 'Hide from map' : 'Show on map');
+  b0.onclick = (ev) => {
+    ev.stopPropagation();
+    // The map draws one pegRNA, so this is a single slot even though any
+    // number of rows can be expanded at once.
+    state.activeDesign = d;
+    state.activeBystander = shown ? null : b;
+    rerenderDesigns();
+    render();
+  };
+  wrap.appendChild(b0);
 
   const b1 = el('button', 'ghost', 'Send RTT to comparison');
   b1.onclick = (ev) => {

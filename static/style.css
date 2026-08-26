@@ -391,3 +391,18 @@ tr.by-detail > td { padding: 0; }
 
 .legend-head { font-weight: 700; color: var(--ink) !important; margin-left: 4px; }
 .legend-head:first-child { margin-left: 0; }
+
+/* a bystander row that is expanded, vs the one currently drawn on the map */
+table.bystanders tr.open > td { border-bottom-color: transparent; }
+table.bystanders tr.open { background: var(--bg); }
+table.bystanders tr.active { background: var(--bystand-bg); }
+table.bystanders tr.active td:first-child::before {
+  content: "▸ ";
+  color: var(--bystand);
+  font-weight: 800;
+}
+.by-detail-body button { margin-right: 8px; }
+
+/* the protein in a bystander panel must wrap, not be clipped by the row */
+.by-detail-body .seqline { word-break: break-all; white-space: normal; }
+.by-detail-body .kv dd { word-break: break-all; }

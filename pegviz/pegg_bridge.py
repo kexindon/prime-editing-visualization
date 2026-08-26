@@ -483,8 +483,20 @@ def _design_one(seq, mut, cand, pam, rtt_length, pbs_length, proto_size,
                 #which base they put there (e.g. the third position of a 4-fold
                 #degenerate codon). Spell the change out so they can be told
                 #apart -- a bare position list makes them look like duplicates.
-                changes = ['%s%d%s' % (rtt_fwd[p], p, new_rtt_fwd[p])
-                           for p in opt['positions']]
+                #Label each change by its position in the SEQUENCE (1-based),
+                #not by its offset inside the RTT. Two numbering systems for the
+                #same event -- "C39A" in the table but position 60 on the map --
+                #read as two different sites.
+                _fwd = {}
+                for _p in opt['positions']:
+                    _w = rtt_offset_to_ref(_p)
+                    _fwd[_p] = None if _w is None else to_forward(_w)
+
+                changes = []
+                for _p in opt['positions']:
+                    _f = _fwd[_p]
+                    _where = ('%d' % (_f + 1)) if _f is not None else ('RTT+%d' % _p)
+                    changes.append('%s%s%s' % (rtt_fwd[_p], _where, new_rtt_fwd[_p]))
 
                 bystanders.append({
                     'changes': changes,
