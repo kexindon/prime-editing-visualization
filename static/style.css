@@ -445,9 +445,33 @@ table.bystanders td.mono { font-size: 11px; }
 
 /* the duplex cells the scaffold spans: bold only, so it reads as a hint about
    the guide rather than a feature of the DNA */
-/* Bold plus a faint rule underneath, so the eye can follow the strand from the
-   spacer across to the RTT without the bridge reading as a DNA feature. */
-.f-bridge {
-  font-weight: 700;
-  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--muted) 45%, transparent);
+
+/* --- the scaffold, drawn as a real connector --------------------------------
+   The scaffold anneals to nothing, so it has no column on the map, and the
+   spacer's 3' end and the RTT's 5' end usually sit on different rows and on
+   opposite sides of the duplex. There is no path of cells to shade between
+   them, so the link is drawn over the viewer as a line measured from where the
+   two endpoint cells actually landed. */
+
+.viewer { position: relative; }
+
+svg.scaffold-link {
+  position: absolute;
+  top: 0; left: 0;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 3;
+}
+.scaffold-path {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  opacity: 0.85;
+}
+.scaffold-label {
+  fill: var(--muted);
+  font-size: 9px;
+  font-family: system-ui, sans-serif;
+  dominant-baseline: middle;
 }
