@@ -11,9 +11,13 @@
 <header class="topbar">
   <h1>pegRNA Design Visualizer</h1>
   <span class="sub">Interactive prime editing design &mdash; powered by <code>PEGG</code></span>
+  <!-- The four assumptions all fail silently: the design still renders, it is
+       just wrong. Stated in the header so it is read before anything is pasted. -->
+  <span class="scope">coding &middot; single continuous exon &middot; + strand &middot; in frame</span>
 </header>
 
 <main>
+
 <!-- ============ 1. SEQUENCE + READING FRAME ============ -->
 <section class="panel">
   <h2><span class="step">1</span> Sequence &amp; reading frame</h2>
@@ -41,6 +45,11 @@
         <option value="+">Forward (+)</option>
         <option value="-">Reverse (&minus;)</option>
       </select>
+    </div>
+    <div class="field">
+      <label for="aaStart">First amino acid is #</label>
+      <input id="aaStart" type="number" value="1" min="-999999" step="1">
+      <span class="hint">e.g. 262 when this is one exon</span>
     </div>
     <div class="field checkbox">
       <label><input type="checkbox" id="showProtein" checked> Show amino acids</label>

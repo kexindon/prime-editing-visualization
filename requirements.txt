@@ -9,3 +9,10 @@ regex>=2022.1     # PEGG's PAM_finder uses regex's overlapped=True search
 # VCFs, which this tool never does. If cyvcf2 is missing or broken (a common
 # htslib linking problem in conda), it is stubbed out automatically -- see
 # _stub_cyvcf2_if_broken() in pegviz/pegg_bridge.py. /api/health reports it.
+
+# Optional -- only for cds_for_visualizer.ipynb, which turns a gene name or a
+# mutation coordinate into the coding sequence to paste into the tool. The web
+# app itself needs none of these.
+# gffutils>=0.12
+# pandas
+# jupyter

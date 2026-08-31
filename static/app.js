@@ -101,6 +101,20 @@ async function refreshFrame() {
   }
 }
 
+//Amino acid numbering. The tool translates whatever is pasted, so residue 1 of
+//that string is not necessarily residue 1 of the protein -- pasting a single
+//exon is the normal case. aaStart says what the first residue is called, and
+//every number shown to the user goes through here so the two cannot disagree.
+function aaOffset() {
+  const raw = parseInt($('aaStart').value, 10);
+  return (Number.isFinite(raw) ? raw : 1) - 1;
+}
+
+//0-based index within the translated string -> the number to display
+function aaNumber(index) {
+  return index + 1 + aaOffset();
+}
+
 function renderProtein() {
   const box = $('proteinOut');
   if (!state.frame || !$('showProtein').checked) {
@@ -110,8 +124,10 @@ function renderProtein() {
   box.classList.remove('hidden');
   box.innerHTML = '';
   const strand = state.frame.strand === '+' ? 'forward (+)' : 'reverse (−)';
+  const n = state.frame.protein.length;
+  const range = n ? ` · ${aaNumber(0)}–${aaNumber(n - 1)}` : '';
   box.appendChild(el('div', null,
-    `Protein — ${strand} strand, frame ${state.frame.orf_start} · ${state.frame.protein.length} aa`));
+    `Protein — ${strand} strand, frame ${state.frame.orf_start} · ${n} aa${range}`));
 
   const line = el('div');
   for (const c of state.frame.protein) {
@@ -312,20 +328,7 @@ function render() {
 
     // protein track (above forward strand) — only for '+' strand frames
     if (showAA && state.frame.strand === '+') {
-      const aaTrack = el('div', 'track');
-      let i = start;
-      while (i < end) {
-        const c = codonAt.get(i);
-        if (c && i + 3 <= end) {
-          const cls = 'aa' + (c.aa === '*' ? ' stop' : '') + (isCodonEdited(c) ? ' changed' : '');
-          aaTrack.appendChild(el('span', cls, c.aa));
-          i += 3;
-        } else {
-          aaTrack.appendChild(el('span', 'cell'));
-          i += 1;
-        }
-      }
-      block.appendChild(aaTrack);
+      for (const t of aaTrackFor(start, end, codonAt, true)) block.appendChild(t);
     }
 
     // Each pegRNA part sits NEXT TO the strand it pairs with, so the two read
@@ -365,26 +368,45 @@ function render() {
 
     // protein track below, for '-' strand frames
     if (showAA && state.frame.strand === '-') {
-      const aaTrack = el('div', 'track');
-      let i = start;
-      while (i < end) {
-        const c = codonAt.get(i);
-        if (c && i + 3 <= end) {
-          const cls = 'aa' + (c.aa === '*' ? ' stop' : '') + (isCodonEdited(c) ? ' changed' : '');
-          aaTrack.appendChild(el('span', cls, c.aa));
-          i += 3;
-        } else {
-          aaTrack.appendChild(el('span', 'cell'));
-          i += 1;
-        }
-      }
-      block.appendChild(aaTrack);
+      for (const t of aaTrackFor(start, end, codonAt, false)) block.appendChild(t);
     }
 
     v.appendChild(block);
   }
 
   renderLegend();
+}
+
+//The amino acid track, plus its own ruler. The letters alone cannot be counted
+//off by eye once the sequence is longer than a line, and when aaStart is set the
+//numbers are the whole point -- residue 273 has to be findable on the map, not
+//just in the readout. Numbered every 5th codon, and always the first on a line.
+function aaTrackFor(start, end, codonAt, numbersAbove) {
+  const letters = el('div', 'track');
+  const numbers = el('div', 'track aa-ruler');
+  let i = start;
+  let firstOnLine = true;
+
+  while (i < end) {
+    const c = codonAt.get(i);
+    if (c && i + 3 <= end) {
+      const cls = 'aa' + (c.aa === '*' ? ' stop' : '') + (isCodonEdited(c) ? ' changed' : '');
+      letters.appendChild(el('span', cls, c.aa));
+
+      const n = aaNumber(c.index);
+      const label = el('span', 'aa');
+      if (firstOnLine || n % 5 === 0) label.textContent = String(n);
+      numbers.appendChild(label);
+
+      firstOnLine = false;
+      i += 3;
+    } else {
+      letters.appendChild(el('span', 'cell'));
+      numbers.appendChild(el('span', 'cell'));
+      i += 1;
+    }
+  }
+  return numbersAbove ? [numbers, letters] : [letters, numbers];
 }
 
 function isCodonEdited(codon) {
@@ -745,7 +767,7 @@ function renderDesigns(data) {
       // name the substitutions the way a variant normally reads (E20K)
       const calls = [];
       for (let i = 0; i < Math.min(ref.length, d.protein.length); i++) {
-        if (ref[i] !== d.protein[i]) calls.push(`${ref[i]}${i + 1}${d.protein[i]}`);
+        if (ref[i] !== d.protein[i]) calls.push(`${ref[i]}${aaNumber(i)}${d.protein[i]}`);
       }
       pw.appendChild(el('div', 'note',
         calls.length ? 'Change: ' + calls.join(', ')
@@ -885,7 +907,10 @@ async function runCompare() {
   }
 }
 
+let _lastCompareData = null;
+
 function renderCompare(c) {
+  _lastCompareData = c;
   const box = $('compareOut');
   box.innerHTML = '';
 
@@ -905,7 +930,7 @@ function renderCompare(c) {
     wrap.appendChild(proteinDiff('Reference', c.ref_protein, c.alt_protein));
     wrap.appendChild(proteinDiff('Edited', c.alt_protein, c.ref_protein));
     if (c.aa_diffs && c.aa_diffs.length) {
-      const list = c.aa_diffs.map(d => `${d.ref}${d.index + 1}${d.alt}`).join(', ');
+      const list = c.aa_diffs.map(d => `${d.ref}${aaNumber(d.index)}${d.alt}`).join(', ');
       wrap.appendChild(el('p', 'note', 'Changes: ' + list));
     }
     box.appendChild(wrap);
@@ -945,6 +970,15 @@ $('seq').addEventListener('input', () => {
 $('orfStart').addEventListener('change', refreshFrame);
 $('frameStrand').addEventListener('change', refreshFrame);
 $('showProtein').addEventListener('change', () => { renderProtein(); render(); });
+
+//Renumbering is display-only -- no design is recomputed, so this does not go
+//back to the server; it just redraws the panels that name a residue.
+$('aaStart').addEventListener('input', () => {
+  renderProtein();
+  render();                 //the sequence map carries codon numbers too
+  rerenderDesigns();
+  if (_lastCompareData) renderCompare(_lastCompareData);
+});
 $('loadExample').addEventListener('click', () => {
   $('seq').value = EXAMPLE;
   $('altSeq').value = 'A';

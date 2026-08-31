@@ -55,6 +55,20 @@ body {
 
 main { max-width: 1400px; margin: 0 auto; padding: 18px 22px 60px; }
 
+/* The assumptions the tool makes about the pasted sequence. Each one fails
+   silently -- the design renders and is simply wrong -- so it sits in the
+   header rather than in the docs. Same type as the subtitle beside it. */
+.topbar .scope {
+  color: var(--edit);
+  font-size: 13px;
+  font-weight: 550;
+  border-left: 1px solid var(--line);
+  padding-left: 14px;
+}
+.topbar .scope::before { content: 'assumes '; font-weight: 400; color: var(--muted); }
+/* wraps under the title on a narrow window rather than being pushed off-screen */
+.topbar { flex-wrap: wrap; }
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
@@ -238,6 +252,16 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   color: #4b5563;
   border-right: 1px solid #e5e7eb;
 }
+/* Codon numbers over the amino acid track. Lighter and borderless so the row
+   reads as a ruler rather than as a second sequence; the letters stay dominant. */
+.track.aa-ruler { height: 13px; }
+.track.aa-ruler .aa {
+  font-size: 9px;
+  color: var(--muted);
+  border-right: none;
+  letter-spacing: -0.02em;
+}
+
 .aa.stop { color: var(--edit); font-weight: 700; }
 .aa.changed { background: var(--edit-bg); color: var(--edit); font-weight: 700; }
 .aa.pad { border-right: none; }
