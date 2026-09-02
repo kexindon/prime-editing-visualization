@@ -488,6 +488,9 @@ function pegRNATracks(d) {
   // Verified both ways against every design: PBS pairs perfectly (0 mismatches)
   // and the RTT mismatches only where it installs something.
   const fwdPam = d.strand === '+';
+
+  //Lay a string across the reference columns [lo, hi). Assumes one base per
+  //column, which is true for the PBS and for the homology arms.
   const lay = (str, lo, hi) => {
     const out = [];
     for (let k = 0; k < str.length; k++) {
@@ -500,7 +503,65 @@ function pegRNATracks(d) {
   };
 
   const pbs = lay(pbsSeq, d.pbs_start, d.pbs_end);
-  const rtt = lay(rttSeq, d.rtt_start, d.rtt_end);
+
+  //The RTT is NOT one base per column: it carries the alt allele, so across the
+  //edit it is longer (insertion) or shorter (deletion) than the reference it
+  //replaces. Laying it 1:1 pushed inserted bases off the end of the RTT and slid
+  //a deletion's whole right arm out of register.
+  //
+  //So lay it in three runs against the columns each one actually occupies:
+  //
+  //    left arm  ref[rtt_start .. editStart)      1:1
+  //    edit      ref[editStart .. editEnd)        alt_len bases over ref_len columns
+  //    right arm ref[editEnd .. rtt_end)          1:1
+  //
+  //Only the middle run can disagree, and it is the only place a gap or a
+  //stacked base is correct. `extra` holds inserted bases that have no column of
+  //their own; `gap` marks columns a deletion leaves empty.
+  const rtt = (() => {
+    const editLo = d.edit_start, editHi = d.edit_end;   //reference columns
+    const refLen = editHi - editLo;
+    const altLen = d.alt_len;
+    const leftLen = d.left_arm_length;
+
+    //RTT string offsets, in PAM-strand order: [0, leftLen) arm, then altLen of
+    //edit, then the rest. On a '+' design the string was reverse complemented,
+    //so read it from the far end to walk along the forward strand.
+    const at = (k) => fwdPam ? rttSeq[rttSeq.length - 1 - k] : rttSeq[k];
+
+    const out = [];
+    const push = (i, k, kind) => {
+      if (i >= 0 && i < L && k >= 0 && k < rttSeq.length) {
+        out.push({ i, ch: at(k), expect: fwdPam ? null : 'same', kind });
+      }
+    };
+
+    let k = 0;
+    for (let i = d.rtt_start; i < editLo; i++, k++) push(i, k, 'arm');
+
+    //the edit: altLen bases spread over refLen columns
+    const editK = k;
+    for (let n = 0; n < Math.max(altLen, refLen); n++) {
+      const i = editLo + n;
+      if (n < altLen && n < refLen) {
+        push(i, editK + n, 'edit');                 //base and column line up
+      } else if (n < altLen) {
+        //inserted base with no column of its own -- stack it on the last one
+        const host = editLo + Math.max(refLen - 1, 0);
+        if (host >= 0 && host < L) {
+          out.push({ i: host, ch: at(editK + n),
+                     expect: fwdPam ? null : 'same', kind: 'edit', extra: true });
+        }
+      } else {
+        //deleted column -- the RTT has nothing here, so leave a gap
+        if (i >= 0 && i < L) out.push({ i, ch: null, kind: 'gap' });
+      }
+    }
+    k = editK + altLen;
+
+    for (let i = editHi; i < d.rtt_end; i++, k++) push(i, k, 'arm');
+    return out;
+  })();
 
   return { spacer, pbs, rtt, strand: d.strand };
 }
@@ -538,16 +599,42 @@ function hasOn(items, start, end) {
 function extensionTrack(pt, start, end, seq) {
   const track = el('div', 'track g-ext');
   const pbsAt = new Map(pt.pbs.map(it => [it.i, it]));
-  const rttAt = new Map(pt.rtt.map(it => [it.i, it]));
+  //A column can hold more than one RTT base: an insertion has bases with no
+  //reference column of their own, and they stack on the column before the
+  //junction. A Map keyed by column silently kept only the last of them.
+  const rttAt = new Map();
+  for (const it of pt.rtt) {
+    if (!rttAt.has(it.i)) rttAt.set(it.i, []);
+    rttAt.get(it.i).push(it);
+  }
 
   for (let i = start; i < end; i++) {
     const p = pbsAt.get(i);
-    const r = rttAt.get(i);
-    if (!p && !r) { track.appendChild(el('span', 'cell')); continue; }
+    const rs = rttAt.get(i);
+    if (!p && !rs) { track.appendChild(el('span', 'cell')); continue; }
 
     const isPbs = !!p;
-    const it = p || r;
+    const it = p || rs[0];
+
+    //A column the RTT deletes: it has no base here, so leave the column visibly
+    //empty rather than sliding the rest of the strand across it.
+    if (!isPbs && it.kind === 'gap') {
+      const g = el('span', 'cell g-rtt-b gap', '–');
+      g.title = 'deleted by the RTT: target ' + (seq[i] || '?') + ', no base in the pegRNA';
+      track.appendChild(g);
+      continue;
+    }
+
     const cell = el('span', 'cell ' + (isPbs ? 'g-pbs-b' : 'g-rtt-b'), it.ch);
+
+    //Inserted bases sharing this column, shown stacked so the RTT keeps every
+    //base it actually carries while the reference columns stay in register.
+    if (!isPbs && rs.length > 1) {
+      cell.classList.add('has-insert');
+      const ins = rs.slice(1).map(x => x.ch).join('');
+      cell.appendChild(el('span', 'ins-flag', ins));
+      cell.title = 'insertion: pegRNA carries ' + it.ch + ins + ' here';
+    }
 
     // What the extension should read here if it pairs perfectly. Both the PBS
     // and the RTT are complementary to the PAM strand, so on a '+' design that

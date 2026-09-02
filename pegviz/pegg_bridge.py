@@ -567,6 +567,18 @@ def _design_one(seq, mut, cand, pam, rtt_length, pbs_length, proto_size,
     #re-installing the RTT does not have to infer it and get indels wrong.
     ref_span = ref_span_
     rtt_f_start = to_forward(rtt_start, ref_span)
+
+    #The edit's own columns on the forward strand. In `work` coordinates it
+    #occupies [left_len, left_len + ref_len); a pure insertion is the zero-width
+    #point at left_len. to_forward() needs the span's length to reverse it, so a
+    #zero-width edit is mapped via the following base and then collapsed.
+    if ref_len:
+        edit_f_start = to_forward(left_len, ref_len)
+        edit_f_end = edit_f_start + ref_len
+    else:
+        edit_f_start = (left_len if orientation == '+'
+                        else to_forward(left_len, 1) + 1)
+        edit_f_end = edit_f_start
     pbs_f_start = to_forward(rtt_start - pbs_length, pbs_length)
     left_arm_f = to_forward(rtt_start, len(left_rtt)) if len(left_rtt) else rtt_f_start
     right_arm_start_work = left_len + ref_len
@@ -595,6 +607,15 @@ def _design_one(seq, mut, cand, pam, rtt_length, pbs_length, proto_size,
         'rtt_end': rtt_f_start + ref_span,
         #reference bases the RTT replaces; differs from rtt_length for indels
         'ref_span': ref_span,
+
+        #Where the edit sits on the forward strand, and how many bases the RTT
+        #carries there. The viewer needs both: across the edit the RTT is not
+        #one base per reference column, so it has to be laid out in three runs
+        #(left arm, edit, right arm) rather than as a single 1:1 overlay.
+        'edit_start': edit_f_start,
+        'edit_end': edit_f_end,
+        'alt_len': alt_len,
+        'ref_len': ref_len,
 
         'extension': revcomp(rtt_fwd) + revcomp(pbs_work),
         'full_pegRNA': cand['protospacer'] + revcomp(rtt_fwd) + revcomp(pbs_work),
