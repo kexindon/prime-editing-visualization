@@ -459,3 +459,7 @@ table.bystanders td.mono { font-size: 11px; }
   white-space: nowrap;
   z-index: 2;
 }
+
+/* Dragging across bases must not start a text selection, which would fight the
+   drag and leave the browser's own highlight over the map. */
+.viewer { user-select: none; -webkit-user-select: none; touch-action: none; }

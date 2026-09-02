@@ -288,6 +288,9 @@ function render() {
   if (!seq) {
     v.appendChild(el('p', 'placeholder', 'Paste a sequence above to begin.'));
     renderLegend();
+//Attached once to the container, not per render: the map is rebuilt on every
+//selection change, so anything bound to a cell would not survive a drag.
+attachViewerSelection($('viewer'));
     return;
   }
 
@@ -690,34 +693,82 @@ function strandTrack(seqStr, start, end, fm, kind, nicks, strandKey) {
     }
     track.appendChild(cell);
   }
-  attachSelection(track);
   return track;
 }
 
-/* drag-to-select across base cells */
-function attachSelection(track) {
-  track.addEventListener('mousedown', (ev) => {
-    const t = ev.target.closest('.cell');
-    if (!t || t.dataset.i === undefined) return;
-    ev.preventDefault();
-    state.dragAnchor = +t.dataset.i;
-    state.editStart = state.dragAnchor;
-    state.editEnd = state.dragAnchor + 1;
-    syncEditInputs();
-    render();
-  });
-  track.addEventListener('mouseover', (ev) => {
-    if (state.dragAnchor === null) return;
-    const t = ev.target.closest('.cell');
-    if (!t || t.dataset.i === undefined) return;
-    const i = +t.dataset.i;
-    state.editStart = Math.min(state.dragAnchor, i);
-    state.editEnd = Math.max(state.dragAnchor, i) + 1;
-    syncEditInputs();
-    render();
-  });
+/* Drag-to-select across base cells.
+
+   Listeners live on the viewer, not on the cells: mousedown re-renders, which
+   rebuilds every cell in the map, so a listener attached to the cell you pressed
+   is destroyed before the drag can start and mouseover then fires on elements
+   that never saw the mousedown. Delegating to the container survives the
+   rebuild, which is what makes click-drag, and shift-click for the far end of a
+   run, work at all.
+
+   Selection is driven by pointer events so it also works by touch, and the
+   pointer is captured so a drag that leaves the viewer -- or ends outside the
+   window -- still finishes cleanly. */
+function cellIndexFrom(ev) {
+  //ev.target first. elementFromPoint is only a fallback because it is defined
+  //over the visual viewport: for a cell scrolled out of view it returns null,
+  //which silently killed the drag as soon as the map was scrolled.
+  let cell = ev.target && ev.target.closest && ev.target.closest('.cell');
+
+  if (!cell || cell.dataset.i === undefined) {
+    const node = document.elementFromPoint(ev.clientX, ev.clientY);
+    cell = node && node.closest && node.closest('.cell');
+  }
+  if (!cell || cell.dataset.i === undefined) return null;
+  return +cell.dataset.i;
 }
-document.addEventListener('mouseup', () => { state.dragAnchor = null; });
+
+function setSelection(a, b) {
+  state.editStart = Math.min(a, b);
+  state.editEnd = Math.max(a, b) + 1;
+  syncEditInputs();
+  render();
+}
+
+function attachViewerSelection(viewer) {
+  viewer.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    const i = cellIndexFrom(ev);
+    if (i === null) return;
+    ev.preventDefault();
+
+    //Shift-click extends from the existing anchor, so a long run can be picked
+    //by clicking its head then its tail -- no dragging required.
+    if (ev.shiftKey && state.editEnd > state.editStart) {
+      const anchor = (i < state.editStart) ? state.editEnd - 1 : state.editStart;
+      state.dragAnchor = anchor;
+      setSelection(anchor, i);
+    } else {
+      state.dragAnchor = i;
+      setSelection(i, i);
+    }
+
+    //Keep receiving moves even once the cursor leaves the element or the window.
+    if (viewer.setPointerCapture) {
+      try { viewer.setPointerCapture(ev.pointerId); } catch (e) { /* not fatal */ }
+    }
+  });
+
+  viewer.addEventListener('pointermove', (ev) => {
+    if (state.dragAnchor === null) return;
+    const i = cellIndexFrom(ev);
+    if (i === null) return;
+    //Skip the re-render when the selection has not actually changed; otherwise
+    //every mouse move rebuilds the whole map.
+    if (state.editStart === Math.min(state.dragAnchor, i) &&
+        state.editEnd === Math.max(state.dragAnchor, i) + 1) return;
+    setSelection(state.dragAnchor, i);
+  });
+
+  const finish = () => { state.dragAnchor = null; };
+  viewer.addEventListener('pointerup', finish);
+  viewer.addEventListener('pointercancel', finish);
+  document.addEventListener('pointerup', finish);
+}
 
 function renderLegend() {
   const L = $('legend');
@@ -1084,3 +1135,7 @@ $('designBtn').addEventListener('click', runDesign);
 $('compareBtn').addEventListener('click', runCompare);
 
 renderLegend();
+
+//Attached once to the container, not per render: the map is rebuilt on every
+//selection change, so a handler bound to a cell would be destroyed mid-drag.
+attachViewerSelection($('viewer'));
