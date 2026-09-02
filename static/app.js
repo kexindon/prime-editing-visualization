@@ -1054,10 +1054,21 @@ function renderCompare(c) {
 
   const summary = el('p');
   const badges = [];
+  const nIns = (c.nt_inserted || []).reduce((n, x) => n + x.bases.length, 0);
+  const nDel = (c.nt_deleted || []).length;
+  const nAaIns = (c.aa_inserted || []).reduce((n, x) => n + x.residues.length, 0);
+
   if (c.silent) badges.push(['ok', 'silent — protein unchanged']);
   else if (c.frameshift) badges.push(['warn', 'frameshift']);
   else if (c.aa_diffs && c.aa_diffs.length) badges.push(['warn', `${c.aa_diffs.length} aa changed`]);
-  badges.push([null, `${c.nt_diffs.length} nt differ`]);
+  else if (nAaIns) badges.push(['warn', `${nAaIns} aa inserted`]);
+
+  //Substitutions, insertions and deletions counted separately: lumping them
+  //together as "n nt differ" made a 3 nt insertion look like 45 changes.
+  if (c.nt_diffs.length) badges.push([null, `${c.nt_diffs.length} nt substituted`]);
+  if (nIns) badges.push([null, `${nIns} nt inserted`]);
+  if (nDel) badges.push([null, `${nDel} nt deleted`]);
+  if (!c.nt_diffs.length && !nIns && !nDel) badges.push(['ok', 'sequence identical']);
   if (c.length_change) badges.push(['warn', `${c.length_change > 0 ? '+' : ''}${c.length_change} nt`]);
   for (const [k, t] of badges) summary.appendChild(el('span', 'badge' + (k ? ' ' + k : ''), t));
   box.appendChild(summary);
@@ -1065,25 +1076,56 @@ function renderCompare(c) {
   if (c.ref_protein !== undefined) {
     const wrap = el('div', 'design-card');
     wrap.appendChild(el('h3', null, 'Protein'));
-    wrap.appendChild(proteinDiff('Reference', c.ref_protein, c.alt_protein));
-    wrap.appendChild(proteinDiff('Edited', c.alt_protein, c.ref_protein));
-    if (c.aa_diffs && c.aa_diffs.length) {
-      const list = c.aa_diffs.map(d => `${d.ref}${aaNumber(d.index)}${d.alt}`).join(', ');
-      wrap.appendChild(el('p', 'note', 'Changes: ' + list));
+    //Aligned rows, for the same reason as the nucleotides: indexing the two
+    //proteins together marked the entire tail after an insertion as changed.
+    if (c.ref_protein_aligned && c.alt_protein_aligned) {
+      wrap.appendChild(alignedPair('Reference', c.ref_protein_aligned, c.alt_protein_aligned));
+      wrap.appendChild(alignedPair('Edited', c.alt_protein_aligned, c.ref_protein_aligned));
+    } else {
+      wrap.appendChild(proteinDiff('Reference', c.ref_protein, c.alt_protein));
+      wrap.appendChild(proteinDiff('Edited', c.alt_protein, c.ref_protein));
     }
+    const calls = (c.aa_diffs || []).map(d =>
+      d.alt === '-' ? `${d.ref}${aaNumber(d.index)}del`
+                    : `${d.ref}${aaNumber(d.index)}${d.alt}`);
+    for (const ins of (c.aa_inserted || [])) {
+      calls.push(`${ins.residues} inserted after ${aaNumber(ins.after)}`);
+    }
+    if (calls.length) wrap.appendChild(el('p', 'note', 'Changes: ' + calls.join(', ')));
     box.appendChild(wrap);
   }
 
   const seqBox = el('div', 'design-card');
   seqBox.appendChild(el('h3', null, 'Edited sequence'));
-  const line = el('div', 'seqline');
-  const diffs = new Set(c.nt_diffs);
-  for (let i = 0; i < c.alt.length; i++) {
-    const s = el('span', diffs.has(i) ? 'f-edit' : null, c.alt[i]);
-    line.appendChild(s);
+
+  //Drawn from the ALIGNMENT, not by indexing c.alt with reference offsets:
+  //after an indel the two no longer share coordinates, so colouring c.alt at
+  //nt_diffs positions marked the wrong bases.
+  if (c.ref_aligned && c.alt_aligned) {
+    seqBox.appendChild(alignedPair('Reference', c.ref_aligned, c.alt_aligned));
+    seqBox.appendChild(alignedPair('Edited', c.alt_aligned, c.ref_aligned));
+  } else {
+    const line = el('div', 'seqline');
+    for (const ch of c.alt) line.appendChild(el('span', null, ch));
+    seqBox.appendChild(line);
   }
-  seqBox.appendChild(line);
   box.appendChild(seqBox);
+}
+
+/* One row of a gapped alignment: a gap is drawn as '-', a mismatch is flagged.
+   Both strings are already aligned, so indexing them together is valid here --
+   which is exactly what makes this safe for indels. */
+function alignedPair(label, mine, other) {
+  const d = el('div');
+  d.appendChild(el('div', 'note', label));
+  const line = el('div', 'seqline');
+  for (let i = 0; i < mine.length; i++) {
+    const ch = mine[i];
+    const cls = (ch === '-') ? 'aln-gap' : (other[i] !== ch ? 'f-edit' : null);
+    line.appendChild(el('span', cls, ch));
+  }
+  d.appendChild(line);
+  return d;
 }
 
 function proteinDiff(label, seq, other) {

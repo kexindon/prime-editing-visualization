@@ -463,3 +463,6 @@ table.bystanders td.mono { font-size: 11px; }
 /* Dragging across bases must not start a text selection, which would fight the
    drag and leave the browser's own highlight over the map. */
 .viewer { user-select: none; -webkit-user-select: none; touch-action: none; }
+
+/* a gap in an alignment: present in one sequence, absent from the other */
+.aln-gap { color: var(--muted); opacity: 0.5; }

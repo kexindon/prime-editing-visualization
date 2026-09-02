@@ -642,24 +642,67 @@ def _design_one(seq, mut, cand, pam, rtt_length, pbs_length, proto_size,
 
 #--- comparison ---------
 
+def _align(a, b):
+    """
+    Global alignment of two strings, returned as the two gapped strings.
+
+    Uses PEGG's own aligner so the gap penalties match the ones PEGG applies
+    when it classifies a variant, rather than introducing a second opinion.
+    Falls back to no alignment when either side is empty.
+    """
+    if not a or not b:
+        return a or ('-' * len(b)), b or ('-' * len(a))
+
+    al = prime.aligner.align(a, b)[0]
+    return str(al[0]), str(al[1])
+
+
 def compare(seq, edited, orf_start=None, strand='+'):
     """
     Compares reference and edited sequences at the nucleotide level, and -- when
     a reading frame is given -- at the protein level too.
 
-    Nucleotide differences are reported by aligned offset, which is exact for
-    substitutions and indicative for indels (where everything downstream shifts).
-    The protein comparison is the reliable read-out for an indel.
+    Differences are found by ALIGNING the two sequences, not by comparing them
+    position by position. Comparing by offset only works when the two are the
+    same length: after an insertion or deletion everything downstream is shifted
+    by the length change, so a 3 nt indel was reported as ~45 differences -- one
+    for nearly every base after the edit -- rather than as the one event it is.
+
+    Returns nt_diffs as offsets into the REFERENCE (columns the viewer draws),
+    plus a per-position alignment so an indel can be shown as inserted or
+    deleted rather than as a wall of mismatches.
     """
     seq = clean_sequence(seq)
     edited = clean_sequence(edited)
 
-    diffs = [i for i in range(min(len(seq), len(edited))) if seq[i] != edited[i]]
+    ref_aln, alt_aln = _align(seq, edited)
+
+    #Walk the alignment, recording each difference against reference offsets.
+    diffs = []          #substituted reference positions
+    inserted = []       #{'after': ref offset, 'bases': str}
+    deleted = []        #reference offsets absent from the edited sequence
+    ri = -1             #last reference offset consumed
+    for r, a in zip(ref_aln, alt_aln):
+        if r == '-':
+            if inserted and inserted[-1]['after'] == ri:
+                inserted[-1]['bases'] += a
+            else:
+                inserted.append({'after': ri, 'bases': a})
+            continue
+        ri += 1
+        if a == '-':
+            deleted.append(ri)
+        elif r != a:
+            diffs.append(ri)
 
     out = {
         'ref': seq,
         'alt': edited,
         'nt_diffs': diffs,
+        'nt_inserted': inserted,
+        'nt_deleted': deleted,
+        'ref_aligned': ref_aln,
+        'alt_aligned': alt_aln,
         'length_change': len(edited) - len(seq),
     }
 
@@ -668,14 +711,38 @@ def compare(seq, edited, orf_start=None, strand='+'):
         alt_frame = reading_frame(edited, orf_start, strand)
         ref_p, alt_p = ref_frame['protein'], alt_frame['protein']
 
+        #Aligned for the same reason as the nucleotides: an in-frame indel
+        #shifts every residue after it, and comparing by index would report the
+        #whole tail as changed when only one codon was gained or lost.
+        rp_aln, ap_aln = _align(ref_p, alt_p)
         aa_diffs = []
-        for i in range(min(len(ref_p), len(alt_p))):
-            if ref_p[i] != alt_p[i]:
-                aa_diffs.append({'index': i, 'ref': ref_p[i], 'alt': alt_p[i]})
+        aa_inserted = []
+        pi = -1
+        for r, a in zip(rp_aln, ap_aln):
+            if r == '-':
+                #a residue the edit adds; it has no reference index of its own,
+                #so record it as inserted after the last one consumed rather
+                #than dropping it, which reported an in-frame insertion as no
+                #protein change at all
+                if aa_inserted and aa_inserted[-1]['after'] == pi:
+                    aa_inserted[-1]['residues'] += a
+                else:
+                    aa_inserted.append({'after': pi, 'residues': a})
+                continue
+            pi += 1
+            if a == '-':
+                aa_diffs.append({'index': pi, 'ref': r, 'alt': '-'})
+            elif r != a:
+                aa_diffs.append({'index': pi, 'ref': r, 'alt': a})
 
         out['ref_protein'] = ref_p
         out['alt_protein'] = alt_p
+        #the gapped forms, so the viewer can show an indel as a gap instead of
+        #re-deriving a positional diff that is wrong past the edit
+        out['ref_protein_aligned'] = rp_aln
+        out['alt_protein_aligned'] = ap_aln
         out['aa_diffs'] = aa_diffs
+        out['aa_inserted'] = aa_inserted
         out['silent'] = (len(aa_diffs) == 0 and len(ref_p) == len(alt_p))
         out['frameshift'] = (out['length_change'] % 3 != 0)
 
