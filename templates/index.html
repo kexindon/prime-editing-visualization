@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pegRNA Design Visualizer</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="topbar">
+  <h1>pegRNA Design Visualizer</h1>
+  <span class="sub">Interactive prime editing design &mdash; powered by <code>PEGG</code></span>
+  <!-- The four assumptions all fail silently: the design still renders, it is
+       just wrong. Stated in the header so it is read before anything is pasted. -->
+  <span class="scope">coding &middot; single continuous exon &middot; + strand &middot; in frame</span>
+</header>
+
+<main>
+
+<!-- ============ 1. SEQUENCE + READING FRAME ============ -->
+<section class="panel">
+  <h2><span class="step">1</span> Sequence &amp; reading frame</h2>
+
+  <div class="row">
+    <div class="grow">
+      <label for="seq">Double-stranded DNA (forward strand; FASTA header, spaces and numbers are ignored)</label>
+      <textarea id="seq" rows="4" spellcheck="false"
+        placeholder="Paste DNA sequence, e.g. ATGGCTAGCACCGGT..."></textarea>
+    </div>
+  </div>
+
+  <div class="row controls">
+    <div class="field">
+      <label for="orfStart">Reading frame offset</label>
+      <select id="orfStart">
+        <option value="0">Frame 0 (starts at base 1)</option>
+        <option value="1">Frame 1 (starts at base 2)</option>
+        <option value="2">Frame 2 (starts at base 3)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="frameStrand">Translate strand</label>
+      <select id="frameStrand">
+        <option value="+">Forward (+)</option>
+        <option value="-">Reverse (&minus;)</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="aaStart">First amino acid is #</label>
+      <input id="aaStart" type="number" value="1" min="-999999" step="1">
+      <span class="hint">e.g. 262 when this is one exon</span>
+    </div>
+    <div class="field checkbox">
+      <label><input type="checkbox" id="showProtein" checked> Show amino acids</label>
+    </div>
+    <div class="field">
+      <button id="loadExample" class="ghost">Load example</button>
+    </div>
+  </div>
+
+  <div id="proteinOut" class="protein-out hidden"></div>
+</section>
+
+<!-- ============ 2. PAM + SPACER ============ -->
+<section class="panel">
+  <h2><span class="step">2</span> PAM &amp; spacer</h2>
+
+  <div class="row controls">
+    <div class="field">
+      <label for="pam">PAM sequence <span class="hint">IUPAC: N R Y S W K M B D H V</span></label>
+      <input id="pam" value="NGG" spellcheck="false">
+    </div>
+    <div class="field">
+      <label for="protoSize">Protospacer length</label>
+      <input id="protoSize" type="number" value="19" min="15" max="25">
+      <span class="hint">PEGG builds G+N</span>
+    </div>
+    <div class="field">
+      <label for="pamStrandFilter">Show PAMs on</label>
+      <select id="pamStrandFilter">
+        <option value="both">Both strands</option>
+        <option value="+">Forward (+) only</option>
+        <option value="-">Reverse (&minus;) only</option>
+      </select>
+    </div>
+    <div class="field">
+      <button id="findPams">Find PAMs</button>
+    </div>
+  </div>
+
+  <div id="pamList" class="pam-list"></div>
+</section>
+
+<!-- ============ 3. EDIT ============ -->
+<section class="panel">
+  <h2><span class="step">3</span> Nucleotides to modify</h2>
+  <p class="note">Click and drag across the sequence below to select the bases to edit,
+     then type the replacement. Leave the replacement empty for a deletion; select a
+     zero-width point (single click) for an insertion.</p>
+
+  <div class="row controls">
+    <div class="field">
+      <label for="editStart">Start (1-based)</label>
+      <input id="editStart" type="number" min="1" value="1">
+    </div>
+    <div class="field">
+      <label for="editEnd">End (inclusive)</label>
+      <input id="editEnd" type="number" min="0" value="1">
+    </div>
+    <div class="field">
+      <label for="refSeq">Reference</label>
+      <input id="refSeq" readonly class="mono readonly">
+    </div>
+    <div class="field">
+      <label for="altSeq">Replace with</label>
+      <input id="altSeq" class="mono" spellcheck="false" placeholder="e.g. A">
+    </div>
+    <div class="field">
+      <span id="varType" class="badge"></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SEQUENCE VIEWER ============ -->
+<section class="panel">
+  <h2>Sequence map</h2>
+  <div id="legend" class="legend"></div>
+  <div id="viewer" class="viewer">
+    <p class="placeholder">Paste a sequence above to begin.</p>
+  </div>
+</section>
+
+<!-- ============ 4. pegRNA ============ -->
+<section class="panel">
+  <h2><span class="step">4</span> pegRNA: PBS &amp; RTT</h2>
+
+  <div class="row controls">
+    <div class="field">
+      <label for="pbsLen">PBS length</label>
+      <input id="pbsLen" type="number" value="13" min="5" max="17">
+    </div>
+    <div class="field">
+      <label for="rttLen">RTT length <span class="hint">blank = auto</span></label>
+      <input id="rttLen" type="number" min="5" max="80" placeholder="auto">
+    </div>
+    <div class="field checkbox">
+      <label><input type="checkbox" id="silentBy"> Silent bystanders</label>
+    </div>
+    <div class="field">
+      <label for="byWindow">Bystander window (nt)</label>
+      <input id="byWindow" type="number" value="5" min="1" max="20">
+    </div>
+    <div class="field">
+      <label for="byMax">Max silent changes</label>
+      <input id="byMax" type="number" value="2" min="1" max="4">
+    </div>
+    <div class="field">
+      <label for="txStrand">Transcript strand</label>
+      <select id="txStrand">
+        <option value="+">Forward (+)</option>
+      </select>
+      <span class="hint">paste the coding strand</span>
+    </div>
+    <div class="field">
+      <button id="designBtn" class="primary">Design pegRNA</button>
+    </div>
+  </div>
+
+  <div id="designOut"></div>
+</section>
+
+<!-- ============ 5. RTT COMPARISON ============ -->
+<section class="panel">
+  <h2><span class="step">5</span> Compare an RTT</h2>
+  <p class="note">Paste an RTT to check what it installs. It is applied at the selected
+     design's nick and compared with the reference, at nucleotide and protein level.</p>
+
+  <div class="row controls">
+    <div class="field grow">
+      <label for="rttInput">RTT sequence</label>
+      <input id="rttInput" class="mono" spellcheck="false" placeholder="RTT as synthesised (pegRNA orientation)">
+    </div>
+    <div class="field">
+      <label for="rttOrient">Orientation</label>
+      <select id="rttOrient">
+        <option value="peg">pegRNA (reverse complement of target)</option>
+        <option value="sense">Target sense strand</option>
+      </select>
+    </div>
+    <div class="field">
+      <button id="compareBtn">Compare</button>
+    </div>
+  </div>
+
+  <div id="compareOut"></div>
+</section>
+</main>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

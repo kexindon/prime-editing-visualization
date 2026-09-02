@@ -1,0 +1,18 @@
+flask>=2.0
+biopython>=1.80
+regex>=2022.1     # PEGG's PAM_finder uses regex's overlapped=True search
+# PEGG supplies the design logic. Install it, or keep a PEGG3.0 checkout beside
+# this repo (or set PEGG_PATH) and it will be imported from there.
+# pegg>=3.0
+#
+# Note: PEGG imports cyvcf2 at module level but only uses it to read ClinVar
+# VCFs, which this tool never does. If cyvcf2 is missing or broken (a common
+# htslib linking problem in conda), it is stubbed out automatically -- see
+# _stub_cyvcf2_if_broken() in pegviz/pegg_bridge.py. /api/health reports it.
+
+# Optional -- only for cds_for_visualizer.ipynb, which turns a gene name or a
+# mutation coordinate into the coding sequence to paste into the tool. The web
+# app itself needs none of these.
+# gffutils>=0.12
+# pandas
+# jupyter

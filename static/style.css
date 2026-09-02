@@ -1,0 +1,468 @@
+/* pegRNA Design Visualizer
+   Layout is driven by the sequence viewer: a monospace grid of fixed-width base
+   cells, with annotation tracks (protein, PAM, spacer, PBS, RTT) laid over the
+   same column widths so that everything lines up vertically at any zoom. */
+
+:root {
+  --bg:        #f6f7f9;
+  --panel:     #ffffff;
+  --ink:       #1c2024;
+  --muted:     #6b7280;
+  --line:      #e3e6ea;
+  --accent:    #2563eb;
+
+  /* feature colours; kept distinguishable in both hue and lightness */
+  --pam:       #d97706;
+  --pam-bg:    #fef3c7;
+  --spacer:    #2563eb;
+  --spacer-bg: #dbeafe;
+  --pbs:       #059669;
+  --pbs-bg:    #d1fae5;
+  --rtt:       #7c3aed;
+  --rtt-bg:    #ede9fe;
+  --edit:      #dc2626;
+  --edit-bg:   #fee2e2;
+  --bystand:   #0891b2;
+  --bystand-bg:#cffafe;
+
+  --cell: 13px;   /* width of one base cell */
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.topbar {
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  padding: 14px 22px;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.topbar h1 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+.topbar .sub { color: var(--muted); font-size: 13px; }
+.topbar code { background: var(--bg); padding: 1px 5px; border-radius: 4px; }
+
+main { max-width: 1400px; margin: 0 auto; padding: 18px 22px 60px; }
+
+/* The assumptions the tool makes about the pasted sequence. Each one fails
+   silently -- the design renders and is simply wrong -- so it sits in the
+   header rather than in the docs. Same type as the subtitle beside it. */
+.topbar .scope {
+  color: var(--edit);
+  font-size: 13px;
+  font-weight: 550;
+  border-left: 1px solid var(--line);
+  padding-left: 14px;
+}
+.topbar .scope::before { content: 'assumes '; font-weight: 400; color: var(--muted); }
+/* wraps under the title on a narrow window rather than being pushed off-screen */
+.topbar { flex-wrap: wrap; }
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+.panel h2 {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 650;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 21px; height: 21px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.note { color: var(--muted); font-size: 13px; margin: -4px 0 12px; }
+.hint { color: var(--muted); font-weight: 400; font-size: 11px; }
+
+/* --- form controls --- */
+.row { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+.row.controls { margin-top: 10px; }
+.grow { flex: 1 1 340px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field.checkbox { justify-content: flex-end; }
+.field.checkbox label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+label { font-size: 12px; font-weight: 550; color: #374151; }
+
+input, select, textarea, button {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+}
+input:focus, select:focus, textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--accent);
+}
+textarea, .mono { font-family: var(--mono); }
+textarea { width: 100%; resize: vertical; line-height: 1.6; letter-spacing: 0.04em; }
+input.mono { letter-spacing: 0.05em; }
+.readonly { background: var(--bg); color: var(--muted); }
+input[type=number] { width: 92px; }
+#pam { width: 100px; text-transform: uppercase; letter-spacing: 0.08em; }
+
+button { cursor: pointer; font-weight: 550; background: #fff; }
+button:hover { background: var(--bg); }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.primary:hover { background: #1d4ed8; }
+button.ghost { color: var(--accent); border-color: transparent; background: transparent; }
+button.ghost:hover { background: var(--spacer-bg); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.badge {
+  display: inline-block;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: var(--spacer-bg);
+  color: var(--spacer);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+.badge.warn { background: var(--edit-bg); color: var(--edit); }
+.badge.ok   { background: var(--pbs-bg);  color: var(--pbs); }
+
+/* --- protein readout --- */
+.protein-out {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border-radius: 7px;
+  font-family: var(--mono);
+  font-size: 12px;
+  word-break: break-all;
+  line-height: 1.7;
+}
+.protein-out .stop { color: var(--edit); font-weight: 700; }
+
+/* --- PAM list --- */
+.pam-list { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; max-height: 210px; overflow-y: auto; }
+.pam-chip {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--pam);
+  border-radius: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  background: #fff;
+  font-size: 12px;
+  line-height: 1.35;
+}
+.pam-chip:hover { background: var(--pam-bg); }
+.pam-chip.active { background: var(--pam-bg); border-color: var(--pam); box-shadow: 0 0 0 2px var(--pam-bg); }
+.pam-chip .seq { font-family: var(--mono); font-weight: 700; color: var(--pam); }
+.pam-chip .meta { color: var(--muted); font-size: 11px; }
+
+/* --- sequence viewer --- */
+.legend { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); }
+.legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+.viewer {
+  overflow-x: auto;
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.viewer .placeholder { color: var(--muted); font-family: inherit; margin: 0; }
+
+.block { margin-bottom: 16px; }
+.track { display: flex; height: 17px; white-space: nowrap; align-items: center; }
+.track.ruler { height: 14px; color: var(--muted); font-size: 10px; }
+.track.label {
+  height: 14px; font-size: 10px; color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+.cell {
+  width: var(--cell);
+  min-width: var(--cell);
+  text-align: center;
+  display: inline-block;
+  user-select: none;
+}
+.cell.sel-target { cursor: pointer; }
+.cell.sel-target:hover { background: #e5e7eb; }
+
+/* strands */
+.fwd { color: var(--ink); }
+.rev { color: var(--muted); }
+
+/* Features on the DNA itself are marked by WEIGHT ONLY -- no colour, no
+   background. The coloured rows are the pegRNA; leaving the template plain
+   keeps the two visually separate, so it is always clear which strand is DNA
+   and which is the annealed guide. The edit stays coloured because it is the
+   one thing on the template that is not template. */
+/* Boxed rather than underlined: a bottom border sits between the two strands
+   and reads as belonging to whichever one you look at first. */
+.f-pam    { font-weight: 800; box-shadow: inset 0 0 0 2px var(--pam); border-radius: 2px; }
+.f-spacer { font-weight: 700; }
+/* the nicked strand's own extent, kept faint so it never competes with the
+   pegRNA rows above/below it */
+.f-pbs, .f-rtt { font-weight: 700; }
+.f-edit   { color: var(--edit); font-weight: 800; }
+.f-by     { color: var(--bystand); font-weight: 800; }
+.f-sel    { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* nick marker sits between two bases */
+.nick { position: relative; }
+.nick::after {
+  content: "";
+  position: absolute;
+  left: -1px; top: -2px; bottom: -2px;
+  border-left: 2px solid var(--edit);
+}
+
+/* protein track: one amino acid centred over its three bases */
+.aa {
+  width: calc(var(--cell) * 3);
+  min-width: calc(var(--cell) * 3);
+  text-align: center;
+  display: inline-block;
+  font-size: 11px;
+  color: #4b5563;
+  border-right: 1px solid #e5e7eb;
+}
+/* Codon numbers over the amino acid track. Lighter and borderless so the row
+   reads as a ruler rather than as a second sequence; the letters stay dominant. */
+.track.aa-ruler { height: 13px; }
+.track.aa-ruler .aa {
+  font-size: 9px;
+  color: var(--muted);
+  border-right: none;
+  letter-spacing: -0.02em;
+}
+
+.aa.stop { color: var(--edit); font-weight: 700; }
+.aa.changed { background: var(--edit-bg); color: var(--edit); font-weight: 700; }
+.aa.pad { border-right: none; }
+
+/* --- design output --- */
+.design-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 13px 15px;
+  margin-top: 12px;
+}
+.design-card h3 { margin: 0 0 10px; font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 5px 14px; font-size: 12px; align-items: baseline; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; font-family: var(--mono); word-break: break-all; }
+
+.seqline { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+
+table.bystanders {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+  font-size: 12px;
+}
+table.bystanders th, table.bystanders td {
+  text-align: left;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+}
+table.bystanders th { color: var(--muted); font-weight: 600; font-size: 11px; }
+table.bystanders td.mono { font-family: var(--mono); }
+table.bystanders tr:hover { background: var(--bg); }
+table.bystanders tr.active { background: var(--bystand-bg); }
+table.bystanders tr { cursor: pointer; }
+.by-scroll { max-height: 300px; overflow-y: auto; }
+
+.error {
+  background: var(--edit-bg);
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+  border-radius: 7px;
+  padding: 9px 12px;
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+details { margin-top: 10px; }
+summary { cursor: pointer; font-size: 12px; color: var(--accent); font-weight: 550; }
+
+.toast {
+  position: fixed;
+  bottom: 18px; left: 50%;
+  transform: translateX(-50%);
+  background: #1f2937;
+  color: #fff;
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  z-index: 100;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+}
+.hidden { display: none !important; }
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181c; --panel: #1e2126; --ink: #e6e8ea;
+    --muted: #9199a4; --line: #2f343b;
+    --pam-bg:#3d2f0f; --spacer-bg:#12294d; --pbs-bg:#0d3327;
+    --rtt-bg:#2c1f4d; --edit-bg:#4a1a1a; --bystand-bg:#0b333c;
+  }
+  input, select, textarea, button, .pam-chip, .design-card { background: #23272d; }
+  button.primary { background: var(--accent); }
+  .readonly { background: #1a1d21; }
+  .aa { color: #b6bcc4; border-right-color: #343a42; }
+  .cell.sel-target:hover { background: #343a42; }
+  .error { background: #4a1a1a; color: #fca5a5; border-color: #7f1d1d; }
+}
+
+/* --- pegRNA drawn as a molecule annealed to the target ---------------------
+   These are separate rows rather than shading on the target's bases, because
+   the pegRNA's parts overlap on the target: the PBS pairs inside the
+   protospacer, and the RTT covers the PAM. One background per base cannot show
+   both, which previously left the 19 nt spacer visible as only 3 nt. */
+
+.track.g-spacer, .track.g-pbs, .track.g-rtt {
+  height: 16px;
+  white-space: nowrap;
+}
+
+/* the spacer sits against the strand it pairs with */
+.g-spacer-b {
+  background: var(--spacer-bg);
+  color: var(--spacer);
+  border-top: 2px solid var(--spacer);
+}
+.g-pbs-b {
+  background: var(--pbs-bg);
+  color: var(--pbs);
+  font-weight: 600;
+  border-bottom: 2px solid var(--pbs);
+}
+.g-rtt-b {
+  background: var(--rtt-bg);
+  color: var(--rtt);
+  border-bottom: 2px solid var(--rtt);
+}
+
+/* a base the RTT templates differently from the reference: the edit itself,
+   and any silent bystander it carries */
+.g-rtt-b.mismatch, .g-pbs-b.mismatch {
+  background: var(--edit-bg);
+  color: var(--edit);
+  font-weight: 800;
+  border-bottom-color: var(--edit);
+}
+
+/* PBS and RTT are one continuous 3' extension sharing a single row */
+.track.g-ext { height: 16px; }
+
+/* row labels in the left gutter */
+.track[data-label]::before {
+  content: attr(data-label);
+  position: absolute;
+  left: 0;
+  font-size: 9px;
+  color: var(--muted);
+}
+
+/* a silent bystander's own change, kept visually distinct from the edit */
+.g-rtt-b.by-mismatch, .g-pbs-b.by-mismatch {
+  background: var(--bystand-bg);
+  color: var(--bystand);
+  font-weight: 800;
+  border-bottom-color: var(--bystand);
+}
+
+
+.legend-head { font-weight: 700; color: var(--ink) !important; margin-left: 4px; }
+.legend-head:first-child { margin-left: 0; }
+
+table.bystanders tr.active { background: var(--bystand-bg); }
+table.bystanders tr.active td:first-child::before {
+  content: "▸ ";
+  color: var(--bystand);
+  font-weight: 800;
+}
+
+
+/* per-row controls in the bystander table */
+td.by-actions { white-space: nowrap; text-align: right; }
+td.by-actions button {
+  padding: 3px 8px;
+  font-size: 11px;
+  margin-left: 5px;
+}
+td.by-actions button.on {
+  background: var(--bystand);
+  color: #fff;
+  border-color: var(--bystand);
+}
+/* the RTT column is the long one; let the row breathe instead */
+table.bystanders td.mono { font-size: 11px; }
+
+
+
+/* --- indels in the RTT row ---------------------------------------------------
+   The RTT carries the alt allele, so across an edit it does not have one base
+   per reference column. Rather than sliding the strand out of register, a
+   deleted column is left visibly empty and inserted bases are stacked on the
+   column they follow. */
+
+.g-rtt-b.gap {
+  color: var(--muted);
+  opacity: 0.65;
+  background: repeating-linear-gradient(
+    45deg, transparent, transparent 2px,
+    color-mix(in srgb, var(--rtt) 18%, transparent) 2px,
+    color-mix(in srgb, var(--rtt) 18%, transparent) 4px);
+}
+
+.g-rtt-b.has-insert { position: relative; overflow: visible; }
+.ins-flag {
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  transform: translateX(-50%);
+  font-size: 8px;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  padding: 1px 2px;
+  border-radius: 2px;
+  background: var(--rtt);
+  color: #fff;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+/* Dragging across bases must not start a text selection, which would fight the
+   drag and leave the browser's own highlight over the map. */
+.viewer { user-select: none; -webkit-user-select: none; touch-action: none; }
+
+/* a gap in an alignment: present in one sequence, absent from the other */
+.aln-gap { color: var(--muted); opacity: 0.5; }
