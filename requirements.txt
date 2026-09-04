@@ -1,9 +1,11 @@
 flask>=2.0
 biopython>=1.80
 regex>=2022.1     # PEGG's PAM_finder uses regex's overlapped=True search
-# PEGG supplies the design logic. Install it, or keep a PEGG3.0 checkout beside
-# this repo (or set PEGG_PATH) and it will be imported from there.
-# pegg>=3.0
+# PEGG supplies the design logic. Silent bystanders live in pegg.bystander,
+# which only exists from 3.0 on, so an older release would import cleanly and
+# then fail at design time. To develop against a source tree instead, keep a
+# PEGG3.0 checkout beside this repo (or set PEGG_PATH); that takes precedence.
+pegg>=3.0.1
 #
 # Note: PEGG imports cyvcf2 at module level but only uses it to read ClinVar
 # VCFs, which this tool never does. If cyvcf2 is missing or broken (a common
