@@ -7,3 +7,9 @@ venv/
 # sequences exported by cds_for_visualizer.ipynb
 *_CDS.txt
 *_exon*.txt
+
+# Sphinx build output -- Read the Docs builds this itself
+docs_build/
+
+# video source for docs/media/walkthrough.gif; kept locally, too big to track
+docs/media/*.mov

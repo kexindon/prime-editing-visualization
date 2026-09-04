@@ -12,6 +12,9 @@ itself (`pegg.prime`, `pegg.bystander`). This repository is a visual front end
 for it, not a reimplementation: PAM search, pegRNA geometry and silent bystander
 enumeration are all delegated to PEGG so the two cannot drift apart.
 
+**[Full user guide →](DOCUMENTATION.md)** — install, what to paste, and a
+step-by-step walkthrough.
+
 ## Features
 
 **1. Sequence & reading frame** — paste DNA (FASTA headers, whitespace and
@@ -51,12 +54,20 @@ the coding strand, and the position to select. See
 
 ## Running it
 
+PEGG needs Python 3.9 or 3.10 -- its on-target scoring models are pickled with
+scikit-learn 1.1.1, which does not build on newer Pythons.
+
 ```bash
+conda create -n pegg python=3.9 -y
+conda activate pegg
 pip install -r requirements.txt
 python run.py
 ```
 
 Then open <http://127.0.0.1:5050>.
+
+Already have the environment? Just `conda activate pegg && python run.py`, or
+`pip install --upgrade pegg` first to pick up a new PEGG release.
 
 Port 5050 rather than Flask's usual 5000, because macOS runs its AirPlay
 Receiver on 5000 and Flask fails to bind there. Override with `PORT`, and use
