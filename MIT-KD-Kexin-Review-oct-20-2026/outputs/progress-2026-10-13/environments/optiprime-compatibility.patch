@@ -1,0 +1,13 @@
+diff --git a/reaction/rx_dataset.py b/reaction/rx_dataset.py
+index 3475e8c..419448e 100644
+--- a/reaction/rx_dataset.py
++++ b/reaction/rx_dataset.py
+@@ -21,7 +21,7 @@ class RxDataset(object):
+                  rate_plate_sizes: Optional[Dict[str, int]] = None,
+                  preprocess_fn: Optional[Callable[[pd.DataFrame], pd.DataFrame]] = None,
+                  rx_inputs: Optional[Sequence[RxInput]] = None,
+-                 multiprocess: bool = True,
++                 multiprocess: bool = False,  # Local compatibility: serial ViennaRNA featurization.
+                  verbose: bool = True):
+         # Preprocess df if necessary
+         self.df = df if preprocess_fn is None else preprocess_fn(csv_path, df)

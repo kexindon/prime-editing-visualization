@@ -1,0 +1,19 @@
+[
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/work/pegg/.venv/bin/python",
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/work/pegg/PEGG3.0/benchmarks/optiprime_scaling.py",
+  "--single",
+  "--pegg-repo",
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/work/pegg/PEGG3.0",
+  "--optiprime-repo",
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/work/optiprime/repo",
+  "--optiprime-python",
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/work/optiprime/.venv/bin/python",
+  "--candidates",
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/outputs/meeting-prep/pegg_100/pegg_candidates.csv",
+  "--output-dir",
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/outputs/progress-2026-10-13/runtime/n250_w1",
+  "--count",
+  "250",
+  "--workers",
+  "1"
+]

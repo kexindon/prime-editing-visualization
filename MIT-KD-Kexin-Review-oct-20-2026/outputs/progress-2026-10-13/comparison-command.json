@@ -1,0 +1,14 @@
+[
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/work/pegg/.venv/bin/python",
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/work/pegg/PEGG3.0/benchmarks/compare_candidate_scores.py",
+  "--runtime-dir",
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/outputs/progress-2026-10-13/runtime",
+  "--pridict-dir",
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/outputs/pridict2",
+  "--mutation-lookup",
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/outputs/meeting-prep/pegg_100/mutation_lookup.csv",
+  "--historical-scores",
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/outputs/meeting-prep/optiprime_100/scored_candidates.csv",
+  "--output-dir",
+  "/Users/sathvikloke/Documents/Codex/2026-10-05/mit-x20/outputs/progress-2026-10-13/comparison"
+]

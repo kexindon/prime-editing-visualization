@@ -1,0 +1,28 @@
+{
+  "pegg_candidates": 1000,
+  "pridict_candidates": 55845,
+  "matched_candidates": 553,
+  "matched_fraction_of_pegg": 0.553,
+  "targets": 100,
+  "matched_targets": 100,
+  "minimum_matches_per_target": 2,
+  "maximum_matches_per_target": 9,
+  "match_status_counts": {
+    "exact": 553,
+    "outside_pridict_rha_max19": 332,
+    "outside_pridict_rha_min3": 109,
+    "outside_pridict_nick_distance_max25": 6
+  },
+  "matched_strands": {
+    "-": 291,
+    "+": 262
+  },
+  "matched_edit_types": {
+    "SNP": 541,
+    "DEL": 5,
+    "INS": 4,
+    "ONP": 3
+  },
+  "duplicate_or_ambiguous_identities": 0,
+  "interpretation": "Exact target/guide geometry only. Models use different experimental metadata. No measured efficiencies; no biological accuracy conclusion."
+}

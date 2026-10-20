@@ -1,0 +1,11 @@
+--- a/setup.py
++++ b/setup.py
+@@ -316,7 +316,7 @@
+ 
+ if __name__ == "__main__":
+     CURRENT_DIR = Path(__file__).absolute().parent
+-    LOG_PATH = Path.home() / 'LightGBM_compilation.log'
++    LOG_PATH = CURRENT_DIR / 'LightGBM_compilation.log'
+     LOG_NOTICE = f"The full version of error log was saved into {LOG_PATH}"
+     IS_SOURCE_FLAG_PATH = CURRENT_DIR / '_IS_SOURCE_PACKAGE.txt'
+     _version_src = CURRENT_DIR.parent / 'VERSION.txt'

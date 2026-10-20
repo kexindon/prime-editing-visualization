@@ -1,0 +1,26 @@
+{
+  "candidate_count": 250,
+  "target_count": 100,
+  "requested_workers": 1,
+  "actual_workers": 1,
+  "batch_size": 128,
+  "group": "Liu_HeLa",
+  "model_time": 4.0,
+  "scorer_wall_seconds": 23.96233279199805,
+  "parent_peak_rss_bytes": 162856960,
+  "largest_reaped_child_peak_rss_bytes": 977960960,
+  "memory_scope": "Separate parent and largest child process high-water marks; not aggregate concurrent RSS.",
+  "returned_rows": 250,
+  "finite_scores": 250,
+  "targets_with_finite_scores": 100,
+  "preserved_candidate_order": true,
+  "errors": {
+    "": 250
+  },
+  "score_min": 0.0009258890218916,
+  "score_max": 0.4385755538940429,
+  "displayed_vs_adapter_spacer_mismatches": 222,
+  "selected_sha256": "a30f99efe5e06cfba95dcf8575bb6c072c2c71f614bf0281c91a395416fac244",
+  "scored_sha256": "0572ab0c6b48dd0bc01f2c67791d36861db12cec3d8151342a88feffe22b4a56",
+  "adapter_inputs_sha256": "c1c712af1ddcc968dcb1c702aa8bf56e1a7a2af79ec0d55b83eeed069b34e9ee"
+}
